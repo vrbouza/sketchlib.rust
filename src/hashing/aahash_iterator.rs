@@ -68,6 +68,8 @@ impl AaHashIterator {
         }
     }
 
+
+    // TODO: heavily modify!
     pub fn new(file: &str, level: AaLevel, concat_fasta: bool) -> Vec<Self> {
         let mut hash_vec = Vec::new();
 

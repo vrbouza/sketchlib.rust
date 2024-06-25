@@ -164,6 +164,14 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         sample_info: bool,
     },
+    /// Fit a clustering model and see what happens
+    FitModel {
+        /// The file with distances stored
+        dist_file: String,
+
+        /// THe model you want to fit
+        model: String,
+    },
 }
 
 /// Function to parse command line args into [`Args`] struct

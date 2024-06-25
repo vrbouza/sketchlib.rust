@@ -159,7 +159,7 @@ impl Sketch {
     }
 
     // TODO could use newer method
-    //  http://proceedings.mlr.press/v115/mai20a.html
+    // http://proceedings.mlr.press/v115/mai20a.html
     // https://github.com/zhaoxiaofei/bindash/blob/eb4f81e50b3c42a1fdc00901290b35d0fa9a1e8d/src/hashutils.hpp#L109
     fn densify_bin(signs: &mut [u64]) -> bool {
         let mut minval = u64::MAX;
@@ -224,12 +224,15 @@ pub fn sketch_files(
     #[cfg(feature = "3di")]
     let struct_strings = if convert_pdb {
         log::info!("Converting PDB files into 3Di representations");
+//         println!("JOJOJOJO");
         Some(pdb_to_3di(input_files).expect("Error converting to 3Di"))
     } else {
         None
     };
     #[cfg(not(feature = "3di"))]
     let struct_strings: Option<Vec<String>> = None;
+
+//     println!("{:?}", struct_strings);
 
     // Open output file
     let data_filename = format!("{output_prefix}.skd");
@@ -267,6 +270,7 @@ pub fn sketch_files(
                         }
                         HashType::PDB => {
                             if let Some(di) = &struct_strings {
+//                                 println!("Length of string: {}", di.len());
                                 AaHashIterator::from_3di_string(di[idx].clone()) // TODO: clone is not ideal
                                     .into_iter()
                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
@@ -280,9 +284,28 @@ pub fn sketch_files(
                         }
                     };
 
-                    hash_its
+//                     hash_its
+//                         .iter_mut()
+//                         .enumerate()
+//                         .map(|(idx, hash_it)| {
+//                             let sample_name = if concat_fasta {
+//                                 format!("{name}_{}", idx + 1)
+//                             } else {
+//                                 name.to_string()
+//                             };
+//                             if hash_it.seq_len() == 0 {
+//                                 panic!("{sample_name} has no valid sequence");
+//                             }
+//                             // Run the sketching
+//                             // (&mut **? C++ called it wants its syntax back)
+//                             Sketch::new(&mut **hash_it, &sample_name, k, sketch_size, rc, min_count)
+//                         })
+//                         .collect::<Vec<Sketch>>()
+
+                    hash_its                    // TEMP!!
                         .iter_mut()
                         .enumerate()
+                        .filter(|(_, hash_it)| hash_it.seq_len() != 0)
                         .map(|(idx, hash_it)| {
                             let sample_name = if concat_fasta {
                                 format!("{name}_{}", idx + 1)

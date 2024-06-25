@@ -2,6 +2,12 @@ use std::fs::File;
 use std::io::{stdout, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 
+extern crate linfa;
+use linfa::Dataset;
+use ndarray::Array2;
+use ndarray_csv::Array2Reader;
+use std::error::Error;
+
 use regex::Regex;
 
 pub type InputFastx = (String, String, Option<String>);
@@ -96,6 +102,16 @@ pub fn get_input_list(
         None => read_input_fastas(seq_files.as_ref().unwrap()),
     }
 }
+
+// pub fn get_distances(
+//     file_list: &Option<String>,
+// ) -> Dataset<_,_> {
+//     // Read input {
+//     let file = File::open(filelist.unwrap())?;
+//     let mut reader = ReaderBuilder::new().delimiter(b'\t').has_headers(false).from_reader(file);
+//     Ok(reader.deserialize_array2((2, 3))?)
+// }
+
 
 pub fn read_subset_names(subset_file: &str) -> Vec<String> {
     let f = File::open(subset_file).unwrap_or_else(|_| panic!("Unable to open {subset_file}"));

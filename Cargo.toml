@@ -53,6 +53,15 @@ anyhow = "1.0"
 # parallelisation
 rayon = "1.8"
 num_cpus = "1.0"
+# ml
+linfa = "*"
+linfa-clustering = "*"
+ndarray = "*"
+ndarray-rand = "*"
+ndarray-csv = "*"
+rand_xoshiro = "*"
+csv = "*"
+
 
 [build-dependencies]
 pyo3-build-config = {version = "*", optional = true}

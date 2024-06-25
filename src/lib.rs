@@ -35,6 +35,8 @@ pub mod io;
 use crate::io::{get_input_list, parse_kmers, read_subset_names, set_ostream};
 pub mod structures;
 
+pub mod fitmodel;
+
 pub mod bloom_filter;
 pub mod hashing;
 
@@ -47,8 +49,8 @@ pub const CHUNK_SIZE: usize = 1000;
 pub fn main() {
     let args = cli_args();
     if args.verbose {
-        simple_logger::init_with_level(log::Level::Info).unwrap();
-        // simple_logger::init_with_level(log::Level::Trace).unwrap();
+//         simple_logger::init_with_level(log::Level::Info).unwrap();
+        simple_logger::init_with_level(log::Level::Trace).unwrap();
     } else {
         simple_logger::init_with_level(log::Level::Warn).unwrap();
     }
@@ -108,7 +110,7 @@ pub fn main() {
                 &input_files,
                 *concat_fasta,
                 #[cfg(feature = "3di")]
-                convert_pdb,
+                *convert_pdb,
                 &kmers,
                 sketch_size,
                 &seq_type,
@@ -389,6 +391,18 @@ pub fn main() {
                 println!("{sketches:?}");
             }
             print_success = false; // Turn the final message off
+        }
+        Commands::FitModel {
+            dist_file,
+            model,
+        } => {
+            let dist_file_name = if dist_file.ends_with(".dist") || dist_file.ends_with(".dist") {
+                &dist_file[0..dist_file.len() - 5]
+            } else {
+                dist_file.as_str()
+            };
+
+
         }
     }
     let end = Instant::now();
