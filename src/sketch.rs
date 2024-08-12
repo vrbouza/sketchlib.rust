@@ -305,7 +305,9 @@ pub fn sketch_files(
                     hash_its                    // TEMP!!
                         .iter_mut()
                         .enumerate()
-                        .filter(|(_, hash_it)| hash_it.seq_len() != 0)
+//                         .filter(|(_, hash_it)| hash_it.seq_len() != 0)
+                        .filter(|(_, hash_it)| hash_it.seq_len() > 100)
+                        .filter(|(_, hash_it)| std::str::from_utf8((hash_it).seq()).unwrap().split(",").all(|x| x.chars().count() > 64))
                         .map(|(idx, hash_it)| {
                             let sample_name = if concat_fasta {
                                 format!("{name}_{}", idx + 1)
