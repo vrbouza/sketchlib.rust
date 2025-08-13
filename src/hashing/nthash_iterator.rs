@@ -3,8 +3,6 @@
 use needletail::{parse_fastx_file, parser::Format};
 
 #[cfg(target_arch = "wasm32")]
-use std::io::Read;
-#[cfg(target_arch = "wasm32")]
 use crate::fastx_wasm::{open_fasta, open_fastq};
 #[cfg(target_arch = "wasm32")]
 use seq_io::fasta::Record as FastaRecord;
@@ -115,7 +113,7 @@ impl NtHashIterator {
 
     #[cfg(target_arch = "wasm32")]
     /// Creates a new ntHash iterator, by loading DNA sequences into memory
-    pub fn new<F: Read>(files: (&web_sys::File, Option<&web_sys::File>), rc: bool, min_qual: u8) -> Vec<Self> {
+    pub fn new(files: (&web_sys::File, Option<&web_sys::File>), rc: bool, min_qual: u8) -> Vec<Self> {
         // Check if we're working with reads, and initalise the filter if so
 
         let file_name = files.0.name();

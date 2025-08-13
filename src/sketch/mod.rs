@@ -6,6 +6,7 @@ use std::sync::mpsc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
