@@ -1,5 +1,18 @@
 //! Functions to support `ntHash` generation over sequences
+#[cfg(not(target_arch = "wasm32"))]
 use needletail::{parse_fastx_file, parser::Format};
+
+#[cfg(target_arch = "wasm32")]
+use std::io::Read;
+#[cfg(target_arch = "wasm32")]
+use crate::fastx_wasm::{open_fasta, open_fastq};
+#[cfg(target_arch = "wasm32")]
+use seq_io::fasta::Record as FastaRecord;
+#[cfg(target_arch = "wasm32")]
+use seq_io::fastq::Record as FastqRecord;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_file_reader::WebSysFile;
+
 use std::cmp::Ordering;
 
 use super::*;
@@ -62,6 +75,7 @@ impl RollHash for NtHashIterator {
 }
 
 impl NtHashIterator {
+    #[cfg(not(target_arch = "wasm32"))]
     /// Creates a new ntHash iterator, by loading DNA sequences into memory
     pub fn new(files: (&str, Option<&String>), rc: bool, min_qual: u8) -> Vec<Self> {
         // Check if we're working with reads, and initalise the filter if so
@@ -99,6 +113,51 @@ impl NtHashIterator {
         vec![hash_it]
     }
 
+    #[cfg(target_arch = "wasm32")]
+    /// Creates a new ntHash iterator, by loading DNA sequences into memory
+    pub fn new<F: Read>(files: (&web_sys::File, Option<&web_sys::File>), rc: bool, min_qual: u8) -> Vec<Self> {
+        // Check if we're working with reads, and initalise the filter if so
+
+        let file_name = files.0.name();
+        let mut file_type = file_name.split('.').nth(file_name.split('.').count() - 1).unwrap();
+        if file_type == "gz" {
+            file_type = file_name.split('.').nth(file_name.split('.').count() - 2).unwrap();
+        }
+
+        let is_reads : bool;
+        if ["fasta", "fa"].contains(&file_type) {
+            is_reads = false;
+        } else if ["fastq", "fq"].contains(&file_type) {
+            is_reads = true;
+        } else {
+            panic!("Unsupported file type.")
+        }
+
+        let mut hash_it = Self {
+            k: 0,
+            rc,
+            fh: 0,
+            rh: None,
+            index: 0,
+            seq: Vec::new(),
+            seq_len: 0,
+            acgt: [0, 0, 0, 0],
+            non_acgt: 0,
+            reads: is_reads,
+        };
+
+        // Read sequence into memory (as we go through multiple times)
+        log::debug!("Preprocessing sequence");
+        hash_it.add_dna_seq(files.0, min_qual);
+        if let Some(fileobj) = files.1 {
+            hash_it.add_dna_seq(fileobj, min_qual);
+        }
+        hash_it.seq_len = hash_it.seq.len() - 1;
+        vec![hash_it]
+    }
+
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn add_dna_seq(&mut self, filename: &str, min_qual: u8) {
         let mut reader =
             parse_fastx_file(filename).unwrap_or_else(|_| panic!("Invalid path/file: {filename}"));
@@ -134,6 +193,94 @@ impl NtHashIterator {
 
             self.seq.push(SEQSEP);
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn add_dna_seq(&mut self, file: &web_sys::File, min_qual: u8) {
+        let file_name = file.name();
+        let mut file_type = file_name.split('.').nth(file_name.split('.').count() - 1).unwrap();
+        if file_type == "gz" {
+            file_type = file_name.split('.').nth(file_name.split('.').count() - 2).unwrap();
+        }
+
+        let is_reads : bool;
+        if ["fasta", "fa"].contains(&file_type) {
+            is_reads = false;
+        } else if ["fastq", "fq"].contains(&file_type) {
+            is_reads = true;
+        } else {
+            panic!("Unsupported file type.")
+        }
+
+        let mut filetoparse = WebSysFile::new(file.clone());
+        if !is_reads {
+            let mut reader = open_fasta(&mut filetoparse);
+            while let Some(seqrec) = reader.next() {
+                for base in seqrec.expect("Invalid FASTA record").seq().iter() {
+                    if valid_base(*base) {
+                        let encoded_base = encode_base(*base);
+                        self.acgt[encoded_base as usize] += 1;
+                        self.seq.push(encoded_base)
+                    } else {
+                        self.non_acgt += 1;
+                        self.seq.push(SEQSEP);
+                    }
+                }
+            }
+        } else {
+            let mut reader = open_fastq(&mut filetoparse);
+            while let Some(seqrec) = reader.next() {
+                let rec = seqrec.expect("Invalid FASTQ record");
+                for (base, qual) in rec.seq().iter().zip(rec.qual()) {
+                    if *qual >= min_qual {
+                        if valid_base(*base) {
+                            let encoded_base = encode_base(*base);
+                            self.acgt[encoded_base as usize] += 1;
+                            self.seq.push(encoded_base)
+                        } else {
+                            self.non_acgt += 1;
+                            self.seq.push(SEQSEP);
+                        }
+                    } else {
+                        self.seq.push(SEQSEP);
+                    }
+                }
+            }
+        }
+
+        // while let Some(record) = reader.next() {
+        //     let seqrec = record.expect("Invalid FASTA/Q record");
+        //     if let Some(quals) = seqrec.qual() {
+        //         for (base, qual) in seqrec.seq().iter().zip(quals) {
+        //             if *qual >= min_qual {
+        //                 if valid_base(*base) {
+        //                     let encoded_base = encode_base(*base);
+        //                     self.acgt[encoded_base as usize] += 1;
+        //                     self.seq.push(encoded_base)
+        //                 } else {
+        //                     self.non_acgt += 1;
+        //                     self.seq.push(SEQSEP);
+        //                 }
+        //             } else {
+        //                 self.seq.push(SEQSEP);
+        //             }
+        //         }
+        //     } else {
+        //         for base in seqrec.seq().iter() {
+        //             if valid_base(*base) {
+        //                 let encoded_base = encode_base(*base);
+        //                 self.acgt[encoded_base as usize] += 1;
+        //                 self.seq.push(encoded_base)
+        //             } else {
+        //                 self.non_acgt += 1;
+        //                 self.seq.push(SEQSEP);
+        //             }
+        //         }
+        //     }
+        //
+        //     self.seq.push(SEQSEP);
+        // }
+
     }
 
     fn new_iterator(

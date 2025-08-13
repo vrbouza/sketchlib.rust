@@ -1,11 +1,16 @@
 //! The class to support .ski creation, reading and writing, containing an inverted
 //! index of multiple sketches
 use std::fmt;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::mpsc;
 
+#[cfg(not(target_arch = "wasm32"))]
 extern crate needletail;
+
 use hashbrown::HashMap;
-use indicatif::{ParallelProgressIterator, ProgressIterator};
+#[cfg(not(target_arch = "wasm32"))]
+use indicatif::ParallelProgressIterator;
+use indicatif::ProgressIterator;
 use rayon::prelude::*;
 use roaring::{RoaringBitmap, RoaringTreemap};
 use serde::{Deserialize, Serialize};
@@ -14,6 +19,7 @@ use super::hashing::{
     bloom_filter::KmerFilter, nthash_iterator::NtHashIterator, HashType, RollHash,
 };
 use crate::distances::distance_matrix::square_to_condensed;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::io::InputFastx;
 use crate::sketch::{sketch_datafile::SketchArrayWriter, Sketch};
 use crate::utils::get_progress_bar;
@@ -36,6 +42,7 @@ pub struct Inverted {
 }
 
 impl Inverted {
+    #[cfg(not(target_arch = "wasm32"))]
     /// Sketch files without transposing bins, and invert the index. Files
     /// may be reordered via [`crate::io::reorder_input_files`]
     ///
@@ -85,6 +92,7 @@ impl Inverted {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Sketch query files in a compatible manner with the index,
     /// used when querying the index on the fly
     pub fn sketch_queries(
@@ -230,6 +238,7 @@ impl Inverted {
         // Reduction from pair_map_bin produces pair_map_all
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn sketch_files_inverted(
         input_files: &[InputFastx],
         file_order: &[usize],
