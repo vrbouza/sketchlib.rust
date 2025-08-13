@@ -21,11 +21,19 @@ use super::hashing::{
 use crate::distances::distance_matrix::square_to_condensed;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::io::InputFastx;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::sketch::{sketch_datafile::SketchArrayWriter, Sketch};
+#[cfg(target_arch = "wasm32")]
+use crate::sketch::Sketch;
 use crate::utils::get_progress_bar;
 use anyhow::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
+
+#[cfg(target_arch = "wasm32")]
+use crate::logw;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_file_reader::WebSysFile;
 
 type InvSketches = (Vec<Vec<u16>>, Vec<String>);
 
@@ -116,6 +124,36 @@ impl Inverted {
         )
     }
 
+    #[cfg(target_arch = "wasm32")]
+    /// Sketch query files in a compatible manner with the index,
+    /// used when querying the index on the fly
+    pub fn sketch_queries(
+        &self,
+        input_files: (&web_sys::File, Option<&web_sys::File>),
+        min_count: u16,
+        min_qual: u8,
+        quiet: bool,
+    ) -> InvSketches {
+        let file_order : Vec<usize>;
+        if input_files.1.is_some() {
+            file_order = vec![0, 1];
+        } else {
+            file_order = vec![0];
+        }
+
+        Self::sketch_files_inverted(
+            input_files,
+            &file_order,
+            self.kmer_size,
+            self.index.len() as u64,
+            &self.hash_type,
+            self.rc,
+            min_count,
+            min_qual,
+            quiet,
+        )
+    }
+
     /// Sample names in the index
     pub fn sample_names(&self) -> &Vec<String> {
         &self.sample_names
@@ -151,6 +189,7 @@ impl Inverted {
         Ok(())
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Loads from `file_prefix.ski`, using MessagePack as the serialisation format
     // NB MessagePack rather the CBOR uses here because of
     // https://github.com/enarx/ciborium/issues/96
@@ -158,6 +197,17 @@ impl Inverted {
         let filename = format!("{file_prefix}.ski");
         log::info!("Loading inverted index from {filename}");
         let ski_file = BufReader::new(File::open(filename)?);
+        let decompress_reader = snap::read::FrameDecoder::new(ski_file);
+        let ski_obj: Self = rmp_serde::decode::from_read(decompress_reader)?;
+        Ok(ski_obj)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    /// Loads from a web_sys file object. Designed for WebAssembly
+    pub fn load(file: web_sys::File) -> Result<Self, Error> {
+        logw("Loading inverted index", Some("info"));
+
+        let ski_file = BufReader::new(WebSysFile::new(file));
         let decompress_reader = snap::read::FrameDecoder::new(ski_file);
         let ski_obj: Self = rmp_serde::decode::from_read(decompress_reader)?;
         Ok(ski_obj)
@@ -317,6 +367,60 @@ impl Inverted {
         (sketch_results, sample_names)
     }
 
+
+    #[cfg(target_arch = "wasm32")]
+    fn sketch_files_inverted(
+        input_files: (&web_sys::File, Option<&web_sys::File>),
+        file_order: &[usize],
+        k: usize,
+        sketch_size: u64,
+        seq_type: &HashType,
+        rc: bool,
+        min_count: u16,
+        min_qual: u8,
+        _quiet: bool,
+    ) -> InvSketches {
+        let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
+            HashType::DNA => {
+                NtHashIterator::new(input_files, rc, min_qual)
+                    .into_iter()
+                    .map(|it| Box::new(it) as Box<dyn RollHash>)
+                    .collect()
+            }
+            _ => unimplemented!("Inverted index only supported for DNA"),
+        };
+
+        if let Some(hash_it) = hash_its.first_mut() {
+            if hash_it.seq_len() == 0 {
+                panic!("Genome 0 has no valid sequence");
+            }
+
+            let mut read_filter = if hash_it.reads() {
+                let mut filter = KmerFilter::new(min_count);
+                filter.init();
+                Some(filter)
+            } else {
+                None
+            };
+
+            let (signs, densified) =
+                Sketch::get_signs(&mut **hash_it, k, &mut read_filter, sketch_size);
+            if densified {
+                logw(format!("The query was densified").as_str(), Some("trace"));
+            }
+
+            let mut sketch_results = vec![Vec::new(); 1];
+
+            sketch_results[0] = signs.iter().map(|h| *h as u16).collect();
+
+            (sketch_results, vec!["".to_string(); file_order.len()])
+        } else {
+            panic!("Empty hash iterator for the query");
+        }
+    }
+
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn build_inverted_index(
         genome_sketches: &[Vec<u16>],
         sketch_size: u64,

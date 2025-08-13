@@ -139,6 +139,7 @@ use std::time::Instant;
 #[macro_use]
 extern crate arrayref;
 extern crate num_cpus;
+#[cfg(not(target_arch = "wasm32"))]
 use anyhow::Error;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;
@@ -148,6 +149,8 @@ use rayon::prelude::*;
 pub mod cli;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::cli::*;
+#[cfg(target_arch = "wasm32")]
+use crate::cli::{DEFAULT_MINCOUNT, DEFAULT_MINQUAL, InvertedQueryType};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::hashing::HashType;
@@ -203,9 +206,11 @@ pub const DEFAULT_KMER: usize = 21;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
-use wasm_bindgen_file_reader::WebSysFile;
-#[cfg(target_arch = "wasm32")]
 extern crate console_error_panic_hook;
+#[cfg(target_arch = "wasm32")]
+use json;
+
+
 
 #[doc(hidden)]
 #[cfg(not(target_arch = "wasm32"))]
@@ -854,30 +859,102 @@ pub fn main() -> Result<(), Error> {
 // WASM implementation
 #[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
-pub fn main() ->  Result<(), Error> {
+pub fn main() {
     panic!("You've compiled sketchlib.rust for WebAssembly support, you cannot use it as a normal binary anymore!");
-    Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+/// Function that allows to propagate panic error messages when compiling to wasm, see https://github.com/rustwasm/console_error_panic_hook
+pub fn init_panic_hook() {
+    console_error_panic_hook::set_once();
+}
+
+#[cfg(target_arch = "wasm32")]
+/// Logging wrapper function for the WebAssembly version
+pub fn logw(text : &str, typ : Option<&str>) {
+    if typ.is_some() {
+        log((String::from("ska.rust::") + typ.unwrap() + "::" + text).as_str());
+    } else {
+        log(text);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+/// Struct to interact with JS when working with WebAssembly
+pub struct SketchlibData {
+    out_probs: Vec<f64>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl SketchlibData {
+    /// Constructor of the SketchlibData struct
+    pub fn new(file1: web_sys::File, file2 : Option<web_sys::File>, skifile: web_sys::File) -> Self {
+        // TEMPORAL BEGIN
+        let min_count  = &DEFAULT_MINCOUNT;
+        let min_qual   = &DEFAULT_MINQUAL;
+        let query_type = &InvertedQueryType::MatchCount;
+        // TEMPORAL END
+
+        let inverted_index = Inverted::load(skifile).expect("Failed loading Sketchlib index");
+
+        logw(format!("Read inverted index:\n{inverted_index:?}").as_str(), Some("info"));
+
+        // Get input files
+        let (queries, _query_names) =
+            inverted_index.sketch_queries((&file1, file2.as_ref()), *min_count, *min_qual, false);
+
+        logw(format!("Running query in mode: {query_type}").as_str(), Some("info"));
+
+        // Query loop (parallelised)
+        let dist = match query_type {
+            InvertedQueryType::MatchCount => {
+                inverted_index.query_against_inverted_index(queries[0].as_slice())
+            },
+            InvertedQueryType::AllBins => {
+                inverted_index.all_shared_bins(queries[0].as_slice())
+            },
+            InvertedQueryType::AnyBin => {
+                inverted_index.any_shared_bins(queries[0].as_slice())
+            },
+        };
+
+        let mut outvec : Vec<f64> = Vec::new();
+
+        for distance in dist {
+            outvec.push((distance as f64)/(2000.0 - distance as f64));
+        }
+
+        Self {
+            out_probs : outvec,
+        }
+    }
 
 
+    /// Mapping function.
+    pub fn get_probs(&self) -> String {
+        if self.out_probs.len() == 0 {
+            panic!("No probabilities calculated!");
+        }
 
+        let mut results = json::JsonValue::new_array();
 
+        logw(format!("Probabilities: {:?}", self.out_probs).as_str(), Some("info"));
 
+        results["probs"]  = json::JsonValue::Array(self.out_probs.iter().map(|x| json::JsonValue::Number((*x).into())).collect());
 
+        logw(results.dump().as_str(), Some("debug"));
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return results.dump();
+    }
+}
 
