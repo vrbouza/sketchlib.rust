@@ -905,7 +905,7 @@ impl SketchlibData {
         let query_type = &InvertedQueryType::MatchCount;
         // TEMPORAL END
 
-        let inverted_index = Inverted::load(skifile).expect("Failed loading Sketchlib index");
+        let inverted_index = Inverted::load(&skifile).expect("Failed loading Sketchlib index");
 
         logw(format!("Read inverted index:\n{inverted_index:?}").as_str(), Some("info"));
 

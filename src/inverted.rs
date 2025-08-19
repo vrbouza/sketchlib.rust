@@ -204,10 +204,10 @@ impl Inverted {
 
     #[cfg(target_arch = "wasm32")]
     /// Loads from a web_sys file object. Designed for WebAssembly
-    pub fn load(file: web_sys::File) -> Result<Self, Error> {
+    pub fn load(file: &web_sys::File) -> Result<Self, Error> {
         logw("Loading inverted index", Some("info"));
 
-        let ski_file = BufReader::new(WebSysFile::new(file));
+        let ski_file = BufReader::new(WebSysFile::new(file.clone()));
         let decompress_reader = snap::read::FrameDecoder::new(ski_file);
         let ski_obj: Self = rmp_serde::decode::from_read(decompress_reader)?;
         Ok(ski_obj)
