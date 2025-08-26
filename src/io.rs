@@ -110,6 +110,34 @@ pub fn reorder_input_files(
     sample_order
 }
 
+/// Parse the metadata for creating an inverted index, so that we can include them in it
+pub fn parse_metadata_info(
+    metadata_file: &str,
+) -> HashMap<String, String> {
+
+    let f = File::open(metadata_file).unwrap_or_else(|_| {
+        panic!("Unable to open species name file {metadata_file}")
+    });
+    let f = BufReader::new(f);
+    let mut out_dict: HashMap<String, String> = HashMap::new(); // Stores [label, metadata]
+    // Read through labels, saves all metadata in the dictionary
+    for line in f.lines() {
+        let line = line.expect("Unable to read line in metadata");
+        let fields: Vec<&str> = line.split_terminator("\t").collect();
+        if out_dict.contains_key(fields[0]) {
+            panic!("Some entry in metadata is duplicated");
+        } else {
+            out_dict.insert(fields[0].to_string(), fields[1].to_string());
+        }
+    }
+
+    log::info!(
+        "Got metadata for {} labels",
+        out_dict.len(),
+    );
+
+    out_dict
+}
 /// Validate and sort k-mer lists provided via the CLI
 pub fn parse_kmers(k: &Kmers) -> Vec<usize> {
     if k.k_vals.is_some() && k.k_seq.is_some() {
