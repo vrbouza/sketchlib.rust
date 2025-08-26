@@ -38,7 +38,7 @@ pub fn read_input_fastas(seq_files: &[String]) -> Vec<InputFastx> {
 pub fn reorder_input_files(
     input_files: &Vec<(String, String, Option<String>)>,
     species_name_file: &str,
-) -> Vec<usize> {
+) -> (Vec<usize>, Option<HashMap<String, String>>) {
     // Set of names, so only these are read from the species order
     log::info!("Reordering samples using labels in {species_name_file}");
     let input_names: HashSet<String> = input_files.iter().map(|fastx| fastx.0.clone()).collect();
@@ -51,6 +51,7 @@ pub fn reorder_input_files(
     });
     let f = BufReader::new(f);
     let mut species_labels: HashMap<String, usize> = HashMap::new(); // Stores [species, species order index]
+    let mut map_names_labels: HashMap<String, String> = HashMap::new(); // Stores [sample name, species]
     let mut label_order: Vec<(String, usize)> = Vec::with_capacity(input_files.len());
     let mut order_idx = 0;
     // Read through labels, assign each name to a cluster in increasing order
@@ -66,6 +67,7 @@ pub fn reorder_input_files(
                 order_idx += 1;
             }
         }
+        map_names_labels.insert(fields[0].to_string(), fields[1].to_string());
     }
     log::info!(
         "{} samples with {} unique labels",
@@ -81,10 +83,12 @@ pub fn reorder_input_files(
         reordered_dict.insert(reordered_name, new_idx);
     }
 
-    let mut sample_order = Vec::new();
+    let mut sample_order  = Vec::new();
+    let outdict;
     if reordered_dict.is_empty() {
         log::warn!("Could not find any sample names in {species_name_file}");
         sample_order = (0..input_files.len()).collect();
+        outdict = None;
     } else {
         // Use lookup table to create a list of new index for each input sample
         // This deals with missing labels
@@ -106,8 +110,10 @@ pub fn reorder_input_files(
                 .saturating_sub(new_idx - (reordered_dict.len() - 1)),
             input_files.len()
         );
+        outdict = Some(map_names_labels);
     }
-    sample_order
+
+    (sample_order, outdict)
 }
 
 /// Parse the metadata for creating an inverted index, so that we can include them in it
