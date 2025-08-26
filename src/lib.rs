@@ -175,7 +175,7 @@ pub mod io;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::io::{
     get_input_list, parse_kmers, read_completeness_file, read_subset_names, reorder_input_files,
-    set_ostream,
+    set_ostream, parse_metadata_info
 };
 
 pub mod structures;
@@ -446,6 +446,7 @@ pub fn main() -> Result<(), Error> {
                 output,
                 write_skq,
                 species_names,
+                metadata,
                 single_strand,
                 min_count,
                 min_qual,
@@ -469,6 +470,20 @@ pub fn main() -> Result<(), Error> {
                     (0..input_files.len()).collect()
                 };
 
+                // Parse metadata, if any
+                let metadata_vec;
+                if let Some(metadata_file) = metadata {
+                    let tmpdict = parse_metadata_info(metadata_file);
+                    let mut tmpvec: Vec<String> = vec!["".to_string(); input_files.len()];
+                    file_order
+                        .iter()
+                        .zip(&input_files)
+                        .for_each(|(idx, (name, _, _))| tmpvec[*idx] = tmpdict[name].clone());
+                    metadata_vec = Some(tmpvec);
+                } else {
+                    metadata_vec = None;
+                };
+
                 let skq_file = if *write_skq {
                     Some(format!("{output}.skq"))
                 } else {
@@ -488,6 +503,7 @@ pub fn main() -> Result<(), Error> {
                     *min_count,
                     *min_qual,
                     args.quiet,
+                    &metadata_vec,
                 );
                 inverted.save(output)?;
                 log::info!("Index info:\n{inverted:?}");
@@ -891,7 +907,8 @@ pub fn logw(text : &str, typ : Option<&str>) {
 #[wasm_bindgen]
 /// Struct to interact with JS when working with WebAssembly
 pub struct SketchlibData {
-    out_probs: Vec<f64>,
+    out_probs: Vec<(f64, usize)>,
+    index: Inverted,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -928,20 +945,22 @@ impl SketchlibData {
             },
         };
 
-        let mut outvec : Vec<f64> = Vec::new();
+        let mut outvec : Vec<(f64, usize)> = Vec::with_capacity(dist.len());
 
-        for distance in dist {
-            outvec.push((distance as f64)/(2000.0 - distance as f64));
+        for i in 0..dist.len() {
+            outvec.push( ((dist[i] as f64)/(2000.0 - dist[i] as f64), i) );
         }
 
+        outvec.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("NaN obtained!"));
         Self {
             out_probs : outvec,
+            index: inverted_index,
         }
     }
 
 
     /// Mapping function.
-    pub fn get_probs(&self) -> String {
+    pub fn get_probs(&self, nouts : usize) -> String {
         if self.out_probs.len() == 0 {
             panic!("No probabilities calculated!");
         }
@@ -950,7 +969,17 @@ impl SketchlibData {
 
         logw(format!("Probabilities: {:?}", self.out_probs).as_str(), Some("info"));
 
-        results["probs"]  = json::JsonValue::Array(self.out_probs.iter().map(|x| json::JsonValue::Number((*x).into())).collect());
+        results["probs"]    = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| json::JsonValue::Number(x.0.into())).collect());
+        results["names"]    = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| {
+            json::JsonValue::String(self.index.get_sample_names()[x.1].clone())
+        }).collect());
+        results["metadata"] = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| {
+            if let Some(metadatavec) = self.index.get_metadata() {
+                json::JsonValue::String(metadatavec[x.1].clone())
+            } else {
+                json::JsonValue::String("".to_string())
+            }
+        }).collect());
 
         logw(results.dump().as_str(), Some("debug"));
 
