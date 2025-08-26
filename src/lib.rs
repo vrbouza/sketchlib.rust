@@ -914,33 +914,41 @@ pub struct SketchlibData {
 #[wasm_bindgen]
 impl SketchlibData {
     /// Constructor of the SketchlibData struct
-    pub fn new(file1: web_sys::File, file2 : Option<web_sys::File>, skifile: web_sys::File) -> Self {
+    pub fn new(skifile: web_sys::File) -> Self {
+        let inverted_index = Inverted::load(&skifile).expect("Failed loading Sketchlib index");
+
+        logw(format!("Read inverted index:\n{inverted_index:?}").as_str(), Some("info"));
+
+        Self {
+            out_probs : Vec::new(),
+            index: inverted_index,
+        }
+    }
+
+    /// Query some files against an inverted index
+    pub fn query(&mut self, file1: web_sys::File, file2 : Option<web_sys::File>) {
         // TEMPORAL BEGIN
         let min_count  = &DEFAULT_MINCOUNT;
         let min_qual   = &DEFAULT_MINQUAL;
         let query_type = &InvertedQueryType::MatchCount;
         // TEMPORAL END
 
-        let inverted_index = Inverted::load(&skifile).expect("Failed loading Sketchlib index");
-
-        logw(format!("Read inverted index:\n{inverted_index:?}").as_str(), Some("info"));
-
         // Get input files
         let (queries, _query_names) =
-            inverted_index.sketch_queries((&file1, file2.as_ref()), *min_count, *min_qual, false);
+            self.index.sketch_queries((&file1, file2.as_ref()), *min_count, *min_qual, false);
 
         logw(format!("Running query in mode: {query_type}").as_str(), Some("info"));
 
         // Query loop (parallelised)
         let dist = match query_type {
             InvertedQueryType::MatchCount => {
-                inverted_index.query_against_inverted_index(queries[0].as_slice())
+                self.index.query_against_inverted_index(queries[0].as_slice())
             },
             InvertedQueryType::AllBins => {
-                inverted_index.all_shared_bins(queries[0].as_slice())
+                self.index.all_shared_bins(queries[0].as_slice())
             },
             InvertedQueryType::AnyBins => {
-                inverted_index.any_shared_bins(queries[0].as_slice())
+                self.index.any_shared_bins(queries[0].as_slice())
             },
         };
 
@@ -951,10 +959,8 @@ impl SketchlibData {
         }
 
         outvec.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("NaN obtained!"));
-        Self {
-            out_probs : outvec,
-            index: inverted_index,
-        }
+
+        self.out_probs = outvec;
     }
 
 
