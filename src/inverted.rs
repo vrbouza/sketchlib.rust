@@ -44,6 +44,7 @@ pub struct Inverted {
     n_samples: usize,
     sample_names: Vec<String>,
     metadata: Option<Vec<String>>,
+    labels: Option<Vec<String>>,
     kmer_size: usize,
     sketch_version: String,
     rc: bool,
@@ -68,6 +69,7 @@ impl Inverted {
         min_qual: u8,
         quiet: bool,
         metadata: &Option<Vec<String>>,
+        labels: &Option<Vec<String>>,
     ) -> Self {
         log::info!("Creating sketches");
         let (sketches, names) = Self::sketch_files_inverted(
@@ -96,6 +98,7 @@ impl Inverted {
             n_samples: names.len(),
             sample_names: names,
             metadata: metadata.clone(),
+            labels: labels.clone(),
             kmer_size: k,
             sketch_version: env!("CARGO_PKG_VERSION").to_string(),
             rc,
@@ -462,6 +465,11 @@ impl Inverted {
     /// Get the metadata, with the same order as in the index
     pub fn get_metadata(&self) -> &Option<Vec<String>> {
         &self.metadata
+    }
+
+    /// Get the sample labels, with the same order as in the index
+    pub fn get_sample_labels(&self) -> &Option<Vec<String>> {
+        &self.labels
     }
 }
 

@@ -463,10 +463,24 @@ pub fn main() -> Result<(), Error> {
                 log::info!("Parsed {} samples in input list", input_files.len());
 
                 // Reordering by species, or default
-                let file_order = if let Some(species_name_file) = species_names {
+                let (file_order, map_names_labels) = if let Some(species_name_file) = species_names {
                     reorder_input_files(&input_files, species_name_file)
                 } else {
-                    (0..input_files.len()).collect()
+                    ((0..input_files.len()).collect(), None)
+                };
+
+                // If species labels were provided, create the list of them
+                let species_labels_vec;
+                if map_names_labels.is_some() {
+                    let tmpdict = map_names_labels.as_ref().unwrap();
+                    let mut tmpvec: Vec<String> = vec!["".to_string(); input_files.len()];
+                    file_order
+                        .iter()
+                        .zip(&input_files)
+                        .for_each(|(idx, (name, _, _))| tmpvec[*idx] = tmpdict.get(name).unwrap().clone());
+                    species_labels_vec = Some(tmpvec);
+                } else {
+                    species_labels_vec = None;
                 };
 
                 // Parse metadata, if any
@@ -503,6 +517,7 @@ pub fn main() -> Result<(), Error> {
                     *min_qual,
                     args.quiet,
                     &metadata_vec,
+                    &species_labels_vec,
                 );
                 inverted.save(output)?;
                 log::info!("Index info:\n{inverted:?}");
@@ -896,7 +911,7 @@ pub fn init_panic_hook() {
 /// Logging wrapper function for the WebAssembly version
 pub fn logw(text : &str, typ : Option<&str>) {
     if typ.is_some() {
-        log((String::from("ska.rust::") + typ.unwrap() + "::" + text).as_str());
+        log((String::from("sketchlib.rust::") + typ.unwrap() + "::" + text).as_str());
     } else {
         log(text);
     }
@@ -959,6 +974,7 @@ impl SketchlibData {
         }
 
         outvec.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("NaN obtained!"));
+        outvec.reverse();
 
         self.out_probs = outvec;
     }
@@ -976,7 +992,11 @@ impl SketchlibData {
 
         results["probs"]    = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| json::JsonValue::Number(x.0.into())).collect());
         results["names"]    = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| {
-            json::JsonValue::String(self.index.get_sample_names()[x.1].clone())
+            if let Some(labelsvec) = self.index.get_sample_labels() {
+                json::JsonValue::String(labelsvec[x.1].clone())
+            } else {
+                json::JsonValue::String("".to_string())
+            }
         }).collect());
         results["metadata"] = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| {
             if let Some(metadatavec) = self.index.get_metadata() {
