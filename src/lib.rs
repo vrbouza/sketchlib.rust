@@ -139,7 +139,6 @@ use std::time::Instant;
 #[macro_use]
 extern crate arrayref;
 extern crate num_cpus;
-#[cfg(not(target_arch = "wasm32"))]
 use anyhow::Error;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;
@@ -940,7 +939,7 @@ impl SketchlibData {
             InvertedQueryType::AllBins => {
                 inverted_index.all_shared_bins(queries[0].as_slice())
             },
-            InvertedQueryType::AnyBin => {
+            InvertedQueryType::AnyBins => {
                 inverted_index.any_shared_bins(queries[0].as_slice())
             },
         };
