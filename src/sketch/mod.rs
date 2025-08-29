@@ -303,17 +303,17 @@ pub fn sketch_files(
                 .par_iter()
                 .progress_with(progress_bar)
                 .enumerate()
-                .map(|(idx, (name, fastx1, fastx2))| {
+                .map(|(idx, (name, fastxvec))| {
                     // Read in sequence and set up rolling hash by alphabet type
                     let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
                         HashType::DNA => {
-                            NtHashIterator::new((fastx1, fastx2.as_ref()), rc, min_qual)
+                            NtHashIterator::new(&fastxvec, rc, min_qual)
                                 .into_iter()
                                 .map(|it| Box::new(it) as Box<dyn RollHash>)
                                 .collect()
                         }
                         HashType::AA(level) => {
-                            AaHashIterator::new(fastx1, level.clone(), concat_fasta)
+                            AaHashIterator::new(&fastxvec, level.clone(), concat_fasta)
                                 .into_iter()
                                 .map(|it| Box::new(it) as Box<dyn RollHash>)
                                 .collect()
@@ -326,7 +326,7 @@ pub fn sketch_files(
                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
                                     .collect()
                             } else {
-                                AaHashIterator::from_3di_file(fastx1)
+                                AaHashIterator::from_3di_file(&fastxvec)
                                     .into_iter()
                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
                                     .collect()

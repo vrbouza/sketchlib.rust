@@ -316,10 +316,10 @@ impl Inverted {
                     .par_iter()
                     .zip(file_order)
                     .progress_with(progress_bar)
-                    .map(|((name, fastx1, fastx2), genome_idx)| {
+                    .map(|((name, fastxvec), genome_idx)| {
                         let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
                             HashType::DNA => {
-                                NtHashIterator::new((fastx1, fastx2.as_ref()), rc, min_qual)
+                                NtHashIterator::new(&fastxvec, rc, min_qual)
                                     .into_iter()
                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
                                     .collect()
@@ -368,7 +368,7 @@ impl Inverted {
         file_order
             .iter()
             .zip(input_files)
-            .for_each(|(idx, (name, _, _))| sample_names[*idx] = name.to_string());
+            .for_each(|(idx, (name, _))| sample_names[*idx] = name.to_string());
 
         (sketch_results, sample_names)
     }

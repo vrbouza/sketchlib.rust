@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use regex::Regex;
 
 /// Wrapper type for the three fields in an rfile
-pub type InputFastx = (String, String, Option<String>);
+pub type InputFastx = (String, Vec<String>);
 
 /// Given a list of input files, parses them into triples of name, filename and
 /// [`None`] to be used as sketch input.
@@ -29,14 +29,14 @@ pub fn read_input_fastas(seq_files: &[String]) -> Vec<InputFastx> {
             Some(capture) => capture[1].to_string(),
             None => file.to_string(),
         };
-        input_files.push((name, file.to_string(), None));
+        input_files.push((name, vec![file.to_string()]));
     }
     input_files
 }
 
 /// Give a reordering for input files given some labels, putting the same labels next to each other
 pub fn reorder_input_files(
-    input_files: &Vec<(String, String, Option<String>)>,
+    input_files: &Vec<(String, Vec<String>)>,
     species_name_file: &str,
 ) -> (Vec<usize>, Option<HashMap<String, String>>) {
     // Set of names, so only these are read from the species order
@@ -144,6 +144,7 @@ pub fn parse_metadata_info(
 
     out_dict
 }
+
 /// Validate and sort k-mer lists provided via the CLI
 pub fn parse_kmers(k: &Kmers) -> Vec<usize> {
     if k.k_vals.is_some() && k.k_seq.is_some() {
@@ -195,6 +196,40 @@ pub fn get_input_list(
         panic!("No input files provided");
     }
     // Read input
+    // match file_list {
+    //     Some(files) => {
+    //         let mut input_files: Vec<InputFastx> = Vec::new();
+    //         let f = File::open(files).unwrap_or_else(|_| {
+    //             panic!(
+    //                 "
+    //         Unable to open file_list {files}"
+    //             )
+    //         });
+    //         let f = BufReader::new(f);
+    //         for line in f.lines() {
+    //             let line = line.expect("Unable to read line in file_list");
+    //             let fields: Vec<&str> = line.split_whitespace().collect();
+    //             // 1 entry: fasta with name = file
+    //             // 2 entries: fasta name, file
+    //             // 3 entries: fastq name, file1, file2
+    //             let parsed_input = match fields.len() {
+    //                 1 => ((fields[0].to_string()), fields[0].to_string(), None),
+    //                 2 => ((fields[0].to_string()), fields[1].to_string(), None),
+    //                 3 => (
+    //                     (fields[0].to_string()),
+    //                     fields[1].to_string(),
+    //                     Some(fields[2].to_string()),
+    //                 ),
+    //                 _ => {
+    //                     panic!("Unable to parse line in file_list")
+    //                 }
+    //             };
+    //             input_files.push(parsed_input);
+    //         }
+    //         input_files
+    //     }
+    //     None => read_input_fastas(seq_files.as_ref().unwrap()),
+    // }
     match file_list {
         Some(files) => {
             let mut input_files: Vec<InputFastx> = Vec::new();
@@ -208,20 +243,20 @@ pub fn get_input_list(
             for line in f.lines() {
                 let line = line.expect("Unable to read line in file_list");
                 let fields: Vec<&str> = line.split_whitespace().collect();
-                // 1 entry: fasta with name = file
-                // 2 entries: fasta name, file
-                // 3 entries: fastq name, file1, file2
+                // 1 entry:           one fastX with name = file
+                // 2 entries:         name, fastX
+                // 3 or more entries: name, fastX1, fastX2, ...
                 let parsed_input = match fields.len() {
-                    1 => ((fields[0].to_string()), fields[0].to_string(), None),
-                    2 => ((fields[0].to_string()), fields[1].to_string(), None),
-                    3 => (
-                        (fields[0].to_string()),
-                        fields[1].to_string(),
-                        Some(fields[2].to_string()),
-                    ),
+                    0 => panic!("Unable to parse line in file_list"),
+                    1 => ((fields[0].to_string()), vec![fields[0].to_string()]),
+                    2 => ((fields[0].to_string()), vec![fields[1].to_string()]),
                     _ => {
-                        panic!("Unable to parse line in file_list")
-                    }
+                        let mut tmpvec = Vec::with_capacity(fields.len() - 1);
+                        for file in fields.iter().skip(1) {
+                            tmpvec.push(file.to_string());
+                        }
+                        ((fields[0].to_string()), tmpvec)
+                    },
                 };
                 input_files.push(parsed_input);
             }
