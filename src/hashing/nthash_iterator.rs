@@ -75,10 +75,10 @@ impl RollHash for NtHashIterator {
 impl NtHashIterator {
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates a new ntHash iterator, by loading DNA sequences into memory
-    pub fn new(files: (&str, Option<&String>), rc: bool, min_qual: u8) -> Vec<Self> {
+    pub fn new(files: &Vec<String>, rc: bool, min_qual: u8) -> Vec<Self> {
         // Check if we're working with reads, and initalise the filter if so
         let mut reader_peek =
-            parse_fastx_file(files.0).unwrap_or_else(|_| panic!("Invalid path/file: {}", files.0));
+            parse_fastx_file(files[0].clone()).unwrap_or_else(|_| panic!("Invalid path/file: {}", files[0]));
         let seq_peek = reader_peek
             .next()
             .expect("Invalid FASTA/Q record")
@@ -86,6 +86,9 @@ impl NtHashIterator {
         let mut reads = false;
         if seq_peek.format() == Format::Fastq {
             reads = true;
+            if files.len() > 2 {
+                panic!("Input files are reads, but there are more than two input files");
+            }
         }
 
         let mut hash_it = Self {
@@ -103,10 +106,10 @@ impl NtHashIterator {
 
         // Read sequence into memory (as we go through multiple times)
         log::debug!("Preprocessing sequence");
-        hash_it.add_dna_seq(files.0, min_qual);
-        if let Some(filename) = files.1 {
-            hash_it.add_dna_seq(filename, min_qual);
+        for file in files.iter() {
+            hash_it.add_dna_seq(file, min_qual);
         }
+
         hash_it.seq_len = hash_it.seq.len() - 1;
         vec![hash_it]
     }

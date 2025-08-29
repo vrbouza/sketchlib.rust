@@ -458,7 +458,7 @@ pub fn main() -> Result<(), Error> {
 
                 // Get input files
                 log::info!("Getting input files");
-                let input_files: Vec<(String, String, Option<String>)> =
+                let input_files: Vec<(String, Vec<String>)> =
                     get_input_list(file_list, seq_files);
                 log::info!("Parsed {} samples in input list", input_files.len());
 
@@ -477,7 +477,7 @@ pub fn main() -> Result<(), Error> {
                     file_order
                         .iter()
                         .zip(&input_files)
-                        .for_each(|(idx, (name, _, _))| tmpvec[*idx] = tmpdict.get(name).unwrap().clone());
+                        .for_each(|(idx, (name, _))| tmpvec[*idx] = tmpdict.get(name).unwrap().clone());
                     species_labels_vec = Some(tmpvec);
                 } else {
                     species_labels_vec = None;
@@ -491,7 +491,7 @@ pub fn main() -> Result<(), Error> {
                     file_order
                         .iter()
                         .zip(&input_files)
-                        .for_each(|(idx, (name, _, _))| tmpvec[*idx] = tmpdict[name].clone());
+                        .for_each(|(idx, (name, _))| tmpvec[*idx] = tmpdict[name].clone());
                     metadata_vec = Some(tmpvec);
                 } else {
                     metadata_vec = None;
@@ -539,7 +539,7 @@ pub fn main() -> Result<(), Error> {
 
                 // Get input files
                 log::info!("Getting input queries");
-                let input_files: Vec<(String, String, Option<String>)> =
+                let input_files: Vec<(String, Vec<String>)> =
                     get_input_list(file_list, seq_files);
                 log::info!("Parsed {} samples in input query list", input_files.len());
 
@@ -733,7 +733,7 @@ pub fn main() -> Result<(), Error> {
             check_and_set_threads(*threads + 1);
             //get input files
             log::info!("Getting input files");
-            let input_files: Vec<(String, String, Option<String>)> =
+            let input_files: Vec<(String, Vec<String>)> =
                 get_input_list(file_list, seq_files);
             log::info!("Parsed {} samples in input list", input_files.len());
 
