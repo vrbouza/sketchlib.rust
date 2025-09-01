@@ -1,13 +1,13 @@
 //! The class to support .ski creation, reading and writing, containing an inverted
 //! index of multiple sketches
-use std::fmt;
+use std::{fmt, cmp};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::mpsc;
 
 #[cfg(not(target_arch = "wasm32"))]
 extern crate needletail;
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;
 use indicatif::ProgressIterator;
@@ -306,6 +306,18 @@ impl Inverted {
         min_qual: u8,
         quiet: bool,
     ) -> InvSketches {
+
+        let mut multientrysamples : HashSet<String> = HashSet::new();
+        let mut differentsamples  : HashSet<String> = HashSet::new();
+
+        for i in input_files.iter() {
+            if differentsamples.contains(&i.0) {
+                multientrysamples.insert(i.0.clone());
+            } else {
+                differentsamples.insert(i.0.clone());
+            }
+        }
+
         let (tx, rx) = mpsc::channel();
 
         let percent = false;
@@ -340,12 +352,13 @@ impl Inverted {
                                 None
                             };
 
-                            let (signs, densified) =
-                                Sketch::get_signs(&mut **hash_it, k, &mut read_filter, sketch_size);
-                            if densified {
-                                log::trace!("{name} was densified");
-                            }
-                            (*genome_idx, signs)
+                            // let (signs, densified) =
+                            //     Sketch::get_signs(&mut **hash_it, k, &mut read_filter, sketch_size);
+                            let signs = Sketch::get_signs_no_densify(&mut **hash_it, k, &mut read_filter, sketch_size);
+                            // if densified {
+                            //     log::trace!("{name} was densified");
+                            // }
+                            (*genome_idx, signs, name)
                         } else {
                             panic!("Empty hash iterator for {name}");
                         }
@@ -356,15 +369,39 @@ impl Inverted {
             });
         });
 
-        let mut sketch_results = vec![Vec::new(); input_files.len()];
-        while let Ok((genome_idx, sketch)) = rx.recv() {
-            let sketch_u16 = sketch.iter().map(|h| *h as u16).collect();
-            sketch_results[genome_idx] = sketch_u16;
+        let mut sketch_results : Vec<Vec<u16>> = vec![Vec::with_capacity(sketch_size as usize); differentsamples.len()];
+        let mut indexes : HashSet<usize> = HashSet::with_capacity(multientrysamples.len());
+        while let Ok((genome_idx, mut sketch, name)) = rx.recv() {
+            if differentsamples.contains(name) {
+                // Not yet written!
+                if !multientrysamples.contains(name) {
+                    // Densifying now!
+                    Sketch::densify_bin(&mut sketch);
+                } else {
+                    // We'll need to densify afterwards, let's save the index
+                    indexes.insert(genome_idx);
+                }
+                sketch_results[genome_idx] = sketch.iter().map(|h| *h as u16).collect();
+                differentsamples.remove(name);
+            } else {
+                // already written! We have to merge
+                for bin in 0..sketch_size {
+                    let saved_sketch = &mut sketch_results[genome_idx][bin as usize];
+                    *saved_sketch = cmp::min(*saved_sketch, sketch[bin as usize] as u16);
+                }
+            }
+        }
+
+        for pos in indexes.iter() {
+            // TODO: this is clearly improvable, but I'm going to do it temporarily this way...
+            let mut tmpvec : Vec<u64> = sketch_results[*pos].iter().map(|h| *h as u64).collect();
+            Sketch::densify_bin(&mut tmpvec[..]);
+            sketch_results[*pos] = tmpvec.iter().map(|h| *h as u16).collect();
         }
 
         // Sample names in the correct order
         // (clones names, but reference would be annoying here)
-        let mut sample_names: Vec<String> = vec!["".to_string(); input_files.len()];
+        let mut sample_names: Vec<String> = vec!["".to_string(); sketch_results.len()];
         file_order
             .iter()
             .zip(input_files)

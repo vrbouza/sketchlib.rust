@@ -152,6 +152,29 @@ impl Sketch {
         (signs, densified)
     }
 
+    /// Get the sketch bins for a sample, but do not transpose
+    pub fn get_signs_no_densify<H: RollHash + ?Sized>(
+        seq_hashes: &mut H,
+        kmer_size: usize,
+        filter: &mut Option<KmerFilter>,
+        num_bins: u64,
+    ) -> Vec<u64> {
+        // Setup storage for each k
+        let mut signs = vec![u64::MAX; num_bins as usize];
+        if let Some(read_filter) = filter {
+            read_filter.clear();
+        }
+        seq_hashes.set_k(kmer_size);
+
+        // Calculate bin minima across all sequence
+        let bin_size: u64 = SIGN_MOD.div_ceil(num_bins);
+        for hash in seq_hashes.iter() {
+            Self::bin_sign(&mut signs, hash % SIGN_MOD, bin_size, filter);
+        }
+
+        signs
+    }
+
     /// The name of the sample
     pub fn name(&self) -> &str {
         &self.name
@@ -210,7 +233,7 @@ impl Sketch {
     // TODO could use newer method
     // http://proceedings.mlr.press/v115/mai20a.html
     // https://github.com/zhaoxiaofei/bindash/blob/eb4f81e50b3c42a1fdc00901290b35d0fa9a1e8d/src/hashutils.hpp#L109
-    fn densify_bin(signs: &mut [u64]) -> bool {
+    pub fn densify_bin(signs: &mut [u64]) -> bool {
         let mut minval = u64::MAX;
         let mut maxval = 0;
         for sign in &mut *signs {
