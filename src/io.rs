@@ -52,7 +52,7 @@ pub fn reorder_input_files(
     let f = BufReader::new(f);
     let mut species_labels: HashMap<String, usize> = HashMap::new(); // Stores [species, species order index]
     let mut map_names_labels: HashMap<String, String> = HashMap::new(); // Stores [sample name, species]
-    let mut label_order: Vec<(String, usize)> = Vec::with_capacity(input_files.len());
+    let mut label_order: Vec<(String, usize)> = Vec::with_capacity(input_files.len()); // Stores [species, index-to-be]
     let mut order_idx = 0;
     // Read through labels, assign each name to a cluster in increasing order
     for line in f.lines() {
@@ -105,11 +105,15 @@ pub fn reorder_input_files(
         }
         log::info!(
             "Found {} of {} input samples with given labels",
-            input_files
-                .len()
-                .saturating_sub(new_idx - (reordered_dict.len() - 1)),
+            // input_files
+            //     .len()
+            //     .saturating_sub(new_idx - (reordered_dict.len() - 1)),
+            input_files.iter().filter(|name| reordered_dict.contains_key(&name.0)).count(),
             input_files.len()
         );
+
+        // log::info!("{:?}", input_files.iter().filter(|name| !reordered_dict.contains_key(&name.0)).map(|el| el).collect::<Vec<_>>());
+
         outdict = Some(map_names_labels);
     }
 
