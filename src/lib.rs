@@ -154,6 +154,8 @@ use crate::cli::{DEFAULT_MINCOUNT, DEFAULT_MINQUAL, InvertedQueryType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::hashing::HashType;
 
+use hashbrown::HashSet;
+
 pub mod sketch;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::sketch::multisketch::MultiSketch;
@@ -462,6 +464,12 @@ pub fn main() -> Result<(), Error> {
                     get_input_list(file_list, seq_files);
                 log::info!("Parsed {} samples in input list", input_files.len());
 
+                let mut differentsamples  : HashSet<String> = HashSet::new();
+
+                for i in input_files.iter() {
+                    differentsamples.insert(i.0.clone());
+                }
+
                 // Reordering by species, or default
                 let (file_order, map_names_labels) = if let Some(species_name_file) = species_names {
                     reorder_input_files(&input_files, species_name_file)
@@ -473,11 +481,14 @@ pub fn main() -> Result<(), Error> {
                 let species_labels_vec;
                 if map_names_labels.is_some() {
                     let tmpdict = map_names_labels.as_ref().unwrap();
-                    let mut tmpvec: Vec<String> = vec!["".to_string(); input_files.len()];
+                    let mut tmpvec: Vec<String> = vec!["".to_string(); differentsamples.len()];
                     file_order
                         .iter()
                         .zip(&input_files)
-                        .for_each(|(idx, (name, _))| tmpvec[*idx] = tmpdict.get(name).unwrap().clone());
+                        .for_each(|(idx, (name, _))| {
+                            // log::info!("{:?} {:?}", name, idx);
+                            tmpvec[*idx] = tmpdict.get(name).unwrap().clone();
+                        });
                     species_labels_vec = Some(tmpvec);
                 } else {
                     species_labels_vec = None;
@@ -487,7 +498,7 @@ pub fn main() -> Result<(), Error> {
                 let metadata_vec;
                 if let Some(metadata_file) = metadata {
                     let tmpdict = parse_metadata_info(metadata_file);
-                    let mut tmpvec: Vec<String> = vec!["".to_string(); input_files.len()];
+                    let mut tmpvec: Vec<String> = vec!["".to_string(); differentsamples.len()];
                     file_order
                         .iter()
                         .zip(&input_files)
