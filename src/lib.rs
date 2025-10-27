@@ -981,7 +981,7 @@ impl SketchlibData {
         let mut outvec : Vec<(f64, usize)> = Vec::with_capacity(dist.len());
 
         for i in 0..dist.len() {
-            outvec.push( ((dist[i] as f64)/(self.index.sketch_size() as f64 - dist[i] as f64), i) );
+            outvec.push( ((dist[i] as f64)/((2 * self.index.sketch_size()) as f64 - dist[i] as f64), i) );
         }
 
         outvec.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("NaN obtained!"));
