@@ -156,6 +156,8 @@ use crate::inverted::Inverted;
 pub mod distances;
 use crate::distances::*;
 
+pub mod simd;
+
 pub mod io;
 use crate::io::{
     get_input_list, parse_kmers, read_completeness_file, read_subset_names, reorder_input_files,

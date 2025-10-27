@@ -30,6 +30,7 @@ crate-type = ["cdylib", "lib"]
 
 [features]
 3di = ["dep:pyo3", "dep:pyo3-build-config"]
+default = ["needletail/compression", "clap/default", "env_logger/default"]
 
 [dependencies]
 # data structures
@@ -39,7 +40,8 @@ roaring = { version = "0.10", features = ["serde"] }
 # ordered-float = "4.2"
 # save/load
 flate2 = { version = "1.1", features = ["zlib-rs"] }
-needletail = { version = "0.5", features = ["compression"] }
+# needletail = { version = "0.5", features = ["compression"] }
+needletail = { version = "0.6.3", features = ["compression"] }
 serde = { version = "1.0", features = ["derive"] }
 ciborium = "0.2"
 rmp-serde = "1.3"
@@ -54,12 +56,27 @@ log = "0.4"
 simple_logger = { version = "4", features = ["stderr"] }
 indicatif = { version = "0.17", features = ["rayon", "improved_unicode"]}
 # cli
-clap = { version = "4.5", features = ["derive"] }
+# clap = { version = "4.5", features = ["derive"] } ### TEST
 regex = "1.10"
 anyhow = "1.0"
 # parallelisation
 rayon = "1.8"
 num_cpus = "1.0"
+
+
+clap = { version = "4.5.31", default-features = false, features = ["std", "derive"] }
+itertools = "0.14.0"
+wide = "0.7.32"
+# needletail = { version =  "0.6.3", default-features = false }
+# flate2 = { version = "1.1.1", features = ["zlib-rs"] }
+# rayon = "1.10.0"
+# log = "0.4.27"
+env_logger = { version = "0.11.8", default-features = false }
+# indicatif = { version = "0.18.0", features = ["rayon"] }
+bincode = "2.0.1"
+
+packed-seq = "4.1.0"
+seq-hash = "0.1.0"
 
 [build-dependencies]
 pyo3-build-config = {version = "0.22", optional = true}

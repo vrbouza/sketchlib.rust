@@ -77,7 +77,7 @@ impl clap::ValueEnum for HashType {
 
 /// Encode an ASCII char to bits 0-3.
 #[inline(always)]
-fn encode_base(base: u8) -> u8 {
+pub fn encode_base(base: u8) -> u8 {
     (base >> 1) & 0x3
 }
 
@@ -89,7 +89,7 @@ fn rc_base(base: u8) -> u8 {
 
 /// A valid base a,c,g,t,u/A,C,G,T,U
 #[inline(always)]
-fn valid_base(mut base: u8) -> bool {
+pub fn valid_base(mut base: u8) -> bool {
     base |= 0x20; // to lower
     matches!(base, b'a' | b'c' | b'g' | b't' | b'u')
 }

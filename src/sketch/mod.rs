@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::hashing::{
-    bloom_filter::KmerFilter, nthash_iterator::NtHashIterator, HashType, RollHash,
+    bloom_filter::KmerFilter, nthash_iterator::NtHashIterator, HashType, RollHash, valid_base, encode_base,
 };
 use crate::hashing::aahash_iterator::AaHashIterator;
 use crate::io::InputFastx;
@@ -21,8 +21,17 @@ pub mod multisketch;
 pub mod sketch_datafile;
 use self::sketch_datafile::SketchArrayWriter;
 
+
+use packed_seq::{PackedSeqVec, SeqVec};
+use crate::simd::{SketchParams, Sketch as Sketch_simd, SketchAlg, BitSketch};
+use needletail::{parse_fastx_file, parser::Format};
+
+use super::*;
+
+
+
 /// Bin bits (lowest of 64-bits to keep)
-pub const BBITS: u64 = 14;
+pub const BBITS: u64 = 16;
 /// Total width of all bins (used as sign % sign_mod)
 pub const SIGN_MOD: u64 = (1 << 61) - 1;
 
@@ -61,63 +70,111 @@ pub struct Sketch {
 
 // TODO: should this take hash_it and filter as input?
 impl Sketch {
-    /// Sketch a sample from a hash generator over its k-mers, transposing
-    pub fn new<H: RollHash + ?Sized>(
-        seq_hashes: &mut H,
+    pub fn new(
+        sketches: &mut Sketch_simd,
         name: &str,
         kmer_lengths: &[usize],
         sketch_size: u64,
         rc: bool,
         min_count: u16,
     ) -> Self {
+
         let (_sketchsize64, num_bins, usigs_size) = num_bins(sketch_size);
         let flattened_size_u64 = usigs_size as usize * kmer_lengths.len();
-        let mut usigs = Vec::with_capacity(flattened_size_u64);
-
-        let mut read_filter = if seq_hashes.reads() {
-            let mut filter = KmerFilter::new(min_count);
-            filter.init();
-            Some(filter)
-        } else {
-            None
-        };
-
-        // Build the sketches across k-mer lengths
-        let mut minhash_sum = 0.0;
-        let mut densified = false;
-        for k in kmer_lengths {
-            log::debug!("Running sketching at k={k}");
-            let (signs, k_densified) = Self::get_signs(seq_hashes, *k, &mut read_filter, num_bins);
-            densified |= k_densified;
-            minhash_sum += (signs[0] as f64) / (SIGN_MOD as f64);
-
-            // Transpose the bins and save to the sketch map
-            log::debug!("Transposing bins");
-            let mut kmer_usigs = vec![0; usigs_size as usize];
-            Self::fill_usigs(&mut kmer_usigs, &signs);
-            usigs.append(&mut kmer_usigs);
+        // let mut usigs = Vec::with_capacity(flattened_size_u64);
+        let mut usigs = vec![0; flattened_size_u64];
+        let inputsketchs;
+        match sketches {
+            Sketch_simd::BottomSketch(sketch) => panic!("wololoooo"),
+            Sketch_simd::BucketSketch(sketch) => inputsketchs = &sketch.buckets,
         }
-        let (reads, acgt, non_acgt) = seq_hashes.sketch_data();
 
-        // Estimate of sequence length from read data
-        let seq_length = if reads {
-            ((kmer_lengths.len() as f64) / minhash_sum) as usize
-        } else {
-            seq_hashes.seq_len()
-        };
+        let withwhichtoiter;
+        match inputsketchs {
+            BitSketch::B16(thevec) => withwhichtoiter = thevec,
+            _ => panic!("wololoooo2")
+        }
+
+        for (sign_index, sign) in withwhichtoiter.iter().enumerate() {
+            let leftshift = sign_index % (u64::BITS as usize);
+            for i in 0..BBITS {
+                let orval = Self::bit_at_pos(*sign as u64, i) << leftshift;
+                usigs[sign_index / (u64::BITS as usize) * (BBITS as usize) + (i as usize)] |= orval;
+            }
+        }
 
         Self {
             usigs,
             name: name.to_string(),
             index: None,
             rc,
-            reads,
-            seq_length,
-            densified,
-            acgt,
-            non_acgt,
+            reads : true,
+            seq_length : 0,
+            densified: false,
+            acgt : [0,0,0,0],
+            non_acgt : 0,
         }
     }
+
+
+    // /// Sketch a sample from a hash generator over its k-mers, transposing
+    // pub fn new<H: RollHash + ?Sized>(
+    //     seq_hashes: &mut H,
+    //     name: &str,
+    //     kmer_lengths: &[usize],
+    //     sketch_size: u64,
+    //     rc: bool,
+    //     min_count: u16,
+    // ) -> Self {
+    //     let (_sketchsize64, num_bins, usigs_size) = num_bins(sketch_size);
+    //     let flattened_size_u64 = usigs_size as usize * kmer_lengths.len();
+    //     let mut usigs = Vec::with_capacity(flattened_size_u64);
+    //
+    //     let mut read_filter = if seq_hashes.reads() {
+    //         let mut filter = KmerFilter::new(min_count);
+    //         filter.init();
+    //         Some(filter)
+    //     } else {
+    //         None
+    //     };
+    //
+    //     // Build the sketches across k-mer lengths
+    //     let mut minhash_sum = 0.0;
+    //     let mut densified = false;
+    //     for k in kmer_lengths {
+    //         log::debug!("Running sketching at k={k}");
+    //         let (signs, k_densified) = Self::get_signs(seq_hashes, *k, &mut read_filter, num_bins);
+    //         densified |= k_densified;
+    //         minhash_sum += (signs[0] as f64) / (SIGN_MOD as f64);
+    //
+    //         // Transpose the bins and save to the sketch map
+    //         log::debug!("Transposing bins");
+    //         let mut kmer_usigs = vec![0; usigs_size as usize];
+    //         Self::fill_usigs(&mut kmer_usigs, &signs);
+    //         usigs.append(&mut kmer_usigs);
+    //     }
+    //     let (reads, acgt, non_acgt) = seq_hashes.sketch_data();
+    //
+    //     // Estimate of sequence length from read data
+    //     let seq_length = if reads {
+    //         ((kmer_lengths.len() as f64) / minhash_sum) as usize
+    //     } else {
+    //         seq_hashes.seq_len()
+    //     };
+    //
+    //     Self {
+    //         usigs,
+    //         name: name.to_string(),
+    //         index: None,
+    //         rc,
+    //         reads,
+    //         seq_length,
+    //         densified,
+    //         acgt,
+    //         non_acgt,
+    //     }
+    // }
+
 
     /// Get the sketch bins for a sample, but do not transpose
     pub fn get_signs<H: RollHash + ?Sized>(
@@ -244,6 +301,7 @@ impl fmt::Display for Sketch {
     }
 }
 
+
 /// Main function to create sketches from a set of input files, which is parallelised
 /// over the input files
 pub fn sketch_files(
@@ -259,21 +317,15 @@ pub fn sketch_files(
     min_qual: u8,
     quiet: bool,
 ) -> Vec<Sketch> {
+
+    match seq_type {
+        HashType::AA(level) => panic!("sketch-simd backend only works for nts!"),
+        _ => {},
+    };
+
     let bin_stride = 1;
     let kmer_stride = (sketch_size * BBITS) as usize;
     let sample_stride = kmer_stride * k.len();
-
-    #[cfg(feature = "3di")]
-    let struct_strings = if convert_pdb {
-        log::info!("Converting PDB files into 3Di representations");
-        Some(pdb_to_3di(input_files).expect("Error converting to 3Di"))
-    } else {
-        None
-    };
-    #[cfg(not(feature = "3di"))]
-    let struct_strings: Option<Vec<String>> = None;
-
-    log::trace!("{struct_strings:?}");
 
     // Open output file
     let data_filename = format!("{output_prefix}.skd");
@@ -283,6 +335,18 @@ pub fn sketch_files(
     // Set up sender (sketching) and receiver (writing)
     let (tx, rx) = mpsc::channel();
     let mut sketches: Vec<Sketch> = Vec::with_capacity(input_files.len());
+
+
+    let sketcher = SketchParams {
+        alg: SketchAlg::Bucket,
+        rc: true,
+        k : k[0],
+        s : sketch_size as usize,
+        b : BBITS as usize,
+        filter_empty: true,
+        filter_out_n: false,
+    }
+    .build();
 
     let percent = false;
     let progress_bar = get_progress_bar(input_files.len(), percent, quiet);
@@ -295,51 +359,102 @@ pub fn sketch_files(
                 .enumerate()
                 .map(|(idx, (name, fastx1, fastx2))| {
                     // Read in sequence and set up rolling hash by alphabet type
-                    let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
-                        HashType::DNA => {
-                            NtHashIterator::new((fastx1, fastx2.as_ref()), rc, min_qual)
-                                .into_iter()
-                                .map(|it| Box::new(it) as Box<dyn RollHash>)
-                                .collect()
-                        }
-                        HashType::AA(level) => {
-                            AaHashIterator::new(fastx1, level.clone(), concat_fasta)
-                                .into_iter()
-                                .map(|it| Box::new(it) as Box<dyn RollHash>)
-                                .collect()
-                        }
-                        HashType::PDB => {
-                            if let Some(di) = &struct_strings {
-                                log::trace!("Length of string: {}", di.len());
-                                AaHashIterator::from_3di_string(di[idx].clone()) // TODO: clone is not ideal
-                                    .into_iter()
-                                    .map(|it| Box::new(it) as Box<dyn RollHash>)
-                                    .collect()
-                            } else {
-                                AaHashIterator::from_3di_file(fastx1)
-                                    .into_iter()
-                                    .map(|it| Box::new(it) as Box<dyn RollHash>)
-                                    .collect()
-                            }
-                        }
-                    };
 
-                    hash_its
-                        .iter_mut()
-                        .enumerate()
-                        .map(|(idx, hash_it)| {
-                            let sample_name = if concat_fasta {
-                                format!("{name}_{}", idx + 1)
-                            } else {
-                                name.to_string()
-                            };
-                            if hash_it.seq_len() == 0 {
-                                panic!("{sample_name} has no valid sequence");
+                    let mut seqs = vec![];
+                    let mut reader =
+                        parse_fastx_file(fastx1).unwrap_or_else(|_| panic!("Invalid path/file: {fastx1}"));
+                    while let Some(record) = reader.next() {
+                        let mut tmpseq = Vec::new();
+                        let seqrec = record.expect("Invalid FASTA/Q record");
+                        if let Some(quals) = seqrec.qual() {
+                            for (base, qual) in seqrec.seq().iter().zip(quals) {
+                                if *qual >= min_qual {
+                                    if valid_base(*base) {
+                                        let encoded_base = encode_base(*base);
+                                        tmpseq.push(encoded_base)
+                                    } else if tmpseq.len() >= k[0] {
+                                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                                        tmpseq.clear();
+                                        // tmpseq.push(SEQSEP);
+                                    } else {
+                                        tmpseq.clear();
+                                    }
+                                } else if tmpseq.len() >= k[0] {
+                                    seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                                    tmpseq.clear();
+                                    // tmpseq.push(SEQSEP);
+                                } else {
+                                    tmpseq.clear();
+                                }
                             }
-                            // Run the sketching
-                            Sketch::new(&mut **hash_it, &sample_name, k, sketch_size, rc, min_count)
-                        })
-                        .collect::<Vec<Sketch>>()
+                        } else {
+                            for base in seqrec.seq().iter() {
+                                if valid_base(*base) {
+                                    let encoded_base = encode_base(*base);
+                                    tmpseq.push(encoded_base)
+                                } else if tmpseq.len() >= k[0] {
+                                    seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                                    tmpseq.clear();
+                                    // tmpseq.push(SEQSEP);
+                                } else {
+                                    tmpseq.clear();
+                                }
+                            }
+                        }
+
+                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                    }
+
+                    if fastx2.is_some() {
+                        let mut reader =
+                            parse_fastx_file(fastx2.as_ref().unwrap()).unwrap_or_else(|_| panic!("Invalid path/file: {fastx1}"));
+                        while let Some(record) = reader.next() {
+                            let mut tmpseq = Vec::new();
+                            let seqrec = record.expect("Invalid FASTA/Q record");
+                            if let Some(quals) = seqrec.qual() {
+                                for (base, qual) in seqrec.seq().iter().zip(quals) {
+                                    if *qual >= min_qual {
+                                        if valid_base(*base) {
+                                            let encoded_base = encode_base(*base);
+                                            tmpseq.push(encoded_base)
+                                        } else if tmpseq.len() >= k[0] {
+                                            seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                                            tmpseq.clear();
+                                            // tmpseq.push(SEQSEP);
+                                        } else {
+                                            tmpseq.clear();
+                                        }
+                                    } else if tmpseq.len() >= k[0] {
+                                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                                        tmpseq.clear();
+                                        // tmpseq.push(SEQSEP);
+                                    } else {
+                                        tmpseq.clear();
+                                    }
+                                }
+                            } else {
+                                for base in seqrec.seq().iter() {
+                                    if valid_base(*base) {
+                                        let encoded_base = encode_base(*base);
+                                        tmpseq.push(encoded_base)
+                                    } else if tmpseq.len() >= k[0] {
+                                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                                        tmpseq.clear();
+                                        // tmpseq.push(SEQSEP);
+                                    } else {
+                                        tmpseq.clear();
+                                    }
+                                }
+                            }
+
+                            seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                        }
+                    }
+
+                    let seqsslices = seqs.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
+
+                    // Run the sketching
+                    vec![Sketch::new(&mut sketcher.sketch_seqs(&seqsslices), &name.to_string(), k, sketch_size, rc, min_count)]
                 })
                 .for_each_with(tx, |tx, sketch| {
                     // Emit the sketch results to the writer thread
@@ -360,3 +475,123 @@ pub fn sketch_files(
 
     sketches
 }
+///// =-=-=-=-=-=-=-=
+///// OLD =======================================================================================================
+///// =-=-=-=-=-=-=-=
+
+// /// Main function to create sketches from a set of input files, which is parallelised
+// /// over the input files
+// pub fn sketch_files(
+//     output_prefix: &str,
+//     input_files: &[InputFastx],
+//     concat_fasta: bool,
+//     #[cfg(feature = "3di")] convert_pdb: bool,
+//     k: &[usize],
+//     sketch_size: u64,
+//     seq_type: &HashType,
+//     rc: bool,
+//     min_count: u16,
+//     min_qual: u8,
+//     quiet: bool,
+// ) -> Vec<Sketch> {
+//     let bin_stride = 1;
+//     let kmer_stride = (sketch_size * BBITS) as usize;
+//     let sample_stride = kmer_stride * k.len();
+//
+//     #[cfg(feature = "3di")]
+//     let struct_strings = if convert_pdb {
+//         log::info!("Converting PDB files into 3Di representations");
+//         Some(pdb_to_3di(input_files).expect("Error converting to 3Di"))
+//     } else {
+//         None
+//     };
+//     #[cfg(not(feature = "3di"))]
+//     let struct_strings: Option<Vec<String>> = None;
+//
+//     log::trace!("{struct_strings:?}");
+//
+//     // Open output file
+//     let data_filename = format!("{output_prefix}.skd");
+//     let mut serial_writer =
+//         SketchArrayWriter::new(&data_filename, bin_stride, kmer_stride, sample_stride);
+//
+//     // Set up sender (sketching) and receiver (writing)
+//     let (tx, rx) = mpsc::channel();
+//     let mut sketches: Vec<Sketch> = Vec::with_capacity(input_files.len());
+//
+//     let percent = false;
+//     let progress_bar = get_progress_bar(input_files.len(), percent, quiet);
+//     // With thanks to https://stackoverflow.com/a/76963325
+//     rayon::scope(|s| {
+//         s.spawn(move |_| {
+//             input_files
+//                 .par_iter()
+//                 .progress_with(progress_bar)
+//                 .enumerate()
+//                 .map(|(idx, (name, fastx1, fastx2))| {
+//                     // Read in sequence and set up rolling hash by alphabet type
+//                     let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
+//                         HashType::DNA => {
+//                             NtHashIterator::new((fastx1, fastx2.as_ref()), rc, min_qual)
+//                                 .into_iter()
+//                                 .map(|it| Box::new(it) as Box<dyn RollHash>)
+//                                 .collect()
+//                         }
+//                         HashType::AA(level) => {
+//                             AaHashIterator::new(fastx1, level.clone(), concat_fasta)
+//                                 .into_iter()
+//                                 .map(|it| Box::new(it) as Box<dyn RollHash>)
+//                                 .collect()
+//                         }
+//                         HashType::PDB => {
+//                             if let Some(di) = &struct_strings {
+//                                 log::trace!("Length of string: {}", di.len());
+//                                 AaHashIterator::from_3di_string(di[idx].clone()) // TODO: clone is not ideal
+//                                     .into_iter()
+//                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
+//                                     .collect()
+//                             } else {
+//                                 AaHashIterator::from_3di_file(fastx1)
+//                                     .into_iter()
+//                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
+//                                     .collect()
+//                             }
+//                         }
+//                     };
+//
+//                     hash_its
+//                         .iter_mut()
+//                         .enumerate()
+//                         .map(|(idx, hash_it)| {
+//                             let sample_name = if concat_fasta {
+//                                 format!("{name}_{}", idx + 1)
+//                             } else {
+//                                 name.to_string()
+//                             };
+//                             if hash_it.seq_len() == 0 {
+//                                 panic!("{sample_name} has no valid sequence");
+//                             }
+//                             // Run the sketching
+//                             Sketch::new(&mut **hash_it, &sample_name, k, sketch_size, rc, min_count)
+//                         })
+//                         .collect::<Vec<Sketch>>()
+//                 })
+//                 .for_each_with(tx, |tx, sketch| {
+//                     // Emit the sketch results to the writer thread
+//                     let _ = tx.send(sketch);
+//                 });
+//         });
+//         // Write each sketch to the .skd file as it comes in
+//         for sketch_file in rx {
+//             // Note double loop as single file may contain multiple samples with concat_fasta
+//             for mut sketch in sketch_file {
+//                 let index = serial_writer.write_sketch(&sketch.get_usigs());
+//                 sketch.set_index(index);
+//                 // Also append (without usigs) to the metadata, which is Vec<Sketch>
+//                 sketches.push(sketch);
+//             }
+//         }
+//     });
+//
+//     sketches
+// }
