@@ -1,14 +1,12 @@
 use simd_sketch::{Sketch as Sketch_simd, SketchParams};
 use needletail::{parser::Format, parse_fastx_file};
 use packed_seq::{PackedSeqVec, SeqVec};
-use crate::hashing::{valid_base, encode_base};
+use crate::hashing::valid_base;
 use crate::sketch::Sketch;
 
-
+/// Wrapper around simd_sketch to make DNA sketches
 pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>, min_qual: u8, 
                         min_count: u16, mut sketchers: Vec<SketchParams>) -> Sketch {
-
-    // get k, ss, rc, from sketchers
 
     let mut reader_peek =
         parse_fastx_file(fastx1).unwrap_or_else(|_| panic!("Invalid path/file: {}", fastx1));
@@ -17,10 +15,13 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
         .expect("Invalid FASTA/Q record")
         .expect("Invalid FASTA/Q record");
     let mut reads = false;
-    if seq_peek.format() == Format::Fastq && min_count != 0 {
+    if seq_peek.format() == Format::Fastq {
         reads = true;
         for is in sketchers.iter_mut() {
-            is.duplicate = true;
+            if min_count != 0 {
+                is.duplicate = true;
+            }
+            is.coverage = 30;
         }
     } else {
         for is in sketchers.iter_mut() {
@@ -37,8 +38,7 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
             let seqrec = record.expect("Invalid FASTA/Q record");
             for base in seqrec.seq().iter() {
                 if valid_base(*base) {
-                    let encoded_base = encode_base(*base);
-                    tmpseq.push(encoded_base)
+                    tmpseq.push(*base);
                 } else {
                     seqs.push(PackedSeqVec::from_ascii(&tmpseq));
                     tmpseq.clear();
@@ -47,7 +47,30 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
             if !tmpseq.is_empty() {
                 seqs.push(PackedSeqVec::from_ascii(&tmpseq));
             }
-        } 
+        }
+
+
+        if fastx2.is_some() {
+            let mut reader =
+                parse_fastx_file(fastx2.as_ref().unwrap()).unwrap_or_else(|_| panic!("Invalid path/file"));
+            while let Some(record) = reader.next() {
+                let mut tmpseq = Vec::new();
+                let seqrec = record.expect("Invalid FASTA/Q record");
+                for base in seqrec.seq().iter() {
+                    if valid_base(*base) {
+                        tmpseq.push(*base);
+                    } else {
+                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                        tmpseq.clear();
+                    }
+                }
+
+                if !tmpseq.is_empty() {
+                    seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                }
+            }
+        }
+
     } else {
         while let Some(record) = reader.next() {
             let mut tmpseq = Vec::new();
@@ -56,8 +79,7 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
                 for (base, qual) in seqrec.seq().iter().zip(quals) {
                     if *qual >= min_qual {
                         if valid_base(*base) {
-                            let encoded_base = encode_base(*base);
-                            tmpseq.push(encoded_base)
+                            tmpseq.push(*base);
                         } else {
                             seqs.push(PackedSeqVec::from_ascii(&tmpseq));
                             tmpseq.clear();
@@ -70,48 +92,7 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
             } else {
                 for base in seqrec.seq().iter() {
                     if valid_base(*base) {
-                        let encoded_base = encode_base(*base);
-                        tmpseq.push(encoded_base)
-                    } else {
-                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-                        tmpseq.clear();
-                    }
-                }
-            }
-
-            if !tmpseq.is_empty() {
-                seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-            }
-        } 
-    }
-
-
-    if fastx2.is_some() {
-        let mut reader =
-            parse_fastx_file(fastx2.as_ref().unwrap()).unwrap_or_else(|_| panic!("Invalid path/file: {fastx1}"));
-        while let Some(record) = reader.next() {
-            let mut tmpseq = Vec::new();
-            let seqrec = record.expect("Invalid FASTA/Q record");
-            if let Some(quals) = seqrec.qual() {
-                for (base, qual) in seqrec.seq().iter().zip(quals) {
-                    if *qual >= min_qual {
-                        if valid_base(*base) {
-                            let encoded_base = encode_base(*base);
-                            tmpseq.push(encoded_base)
-                        } else {
-                            seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-                            tmpseq.clear();
-                        }
-                    } else {
-                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-                        tmpseq.clear();
-                    }
-                }
-            } else {
-                for base in seqrec.seq().iter() {
-                    if valid_base(*base) {
-                        let encoded_base = encode_base(*base);
-                        tmpseq.push(encoded_base)
+                        tmpseq.push(*base);
                     } else {
                         seqs.push(PackedSeqVec::from_ascii(&tmpseq));
                         tmpseq.clear();
@@ -123,7 +104,47 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
                 seqs.push(PackedSeqVec::from_ascii(&tmpseq));
             }
         }
+
+
+        if fastx2.is_some() {
+            let mut reader =
+                parse_fastx_file(fastx2.as_ref().unwrap()).unwrap_or_else(|_| panic!("Invalid second path/file"));
+            while let Some(record) = reader.next() {
+                let mut tmpseq = Vec::new();
+                let seqrec = record.expect("Invalid FASTA/Q record");
+                if let Some(quals) = seqrec.qual() {
+                    for (base, qual) in seqrec.seq().iter().zip(quals) {
+                        if *qual >= min_qual {
+                            if valid_base(*base) {
+                                tmpseq.push(*base);
+                            } else {
+                                seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                                tmpseq.clear();
+                            }
+                        } else {
+                            seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                            tmpseq.clear();
+                        }
+                    }
+                } else {
+                    for base in seqrec.seq().iter() {
+                        if valid_base(*base) {
+                            tmpseq.push(*base);
+                        } else {
+                            seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                            tmpseq.clear();
+                        }
+                    }
+                }
+
+                if !tmpseq.is_empty() {
+                    seqs.push(PackedSeqVec::from_ascii(&tmpseq));
+                }
+            }
+        }
     }
+
+
 
     let seqslices = seqs.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
 

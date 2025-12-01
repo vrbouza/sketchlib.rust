@@ -121,6 +121,7 @@ impl Sketch {
         }
     }
 
+    /// Create a Sketch object from a simd_sketch Sketch object
     pub fn from_sketch_simd(
         sketches: &Vec<Sketch_simd>,
         name: &str,
@@ -129,7 +130,7 @@ impl Sketch {
         let testinputsketchs;
         let rc;
         match &sketches[0] {
-            Sketch_simd::BottomSketch(sketch) => panic!("We only support BucketSketch at this moment."),
+            Sketch_simd::BottomSketch(_sketch) => panic!("We only support BucketSketch at this moment."),
             Sketch_simd::BucketSketch(sketch) => {
                 testinputsketchs = &sketch.buckets;
                 rc = sketch.rc;
@@ -143,7 +144,7 @@ impl Sketch {
         }
         let sketch_size = testwithwhichtoiter.len() as u64;
 
-        let (_sketchsize64, num_bins, usigs_size) = num_bins(sketch_size);
+        let (_sketchsize64, _num_bins, usigs_size) = num_bins(sketch_size);
         let flattened_size_u64 = usigs_size as usize * sketches.len();
         // let mut usigs = Vec::with_capacity(flattened_size_u64);
         let mut usigs = vec![0; flattened_size_u64];
@@ -151,7 +152,7 @@ impl Sketch {
         for is in sketches {
             let inputsketchs;
             match is {
-                Sketch_simd::BottomSketch(sketch) => panic!("We only support BucketSketch at this moment."),
+                Sketch_simd::BottomSketch(_sketch) => panic!("We only support BucketSketch at this moment."),
                 Sketch_simd::BucketSketch(sketch) => inputsketchs = &sketch.buckets,
             }
 
