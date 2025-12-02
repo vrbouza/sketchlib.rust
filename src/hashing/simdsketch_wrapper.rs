@@ -32,33 +32,48 @@ pub fn sketch_with_simd(
         }
     }
 
-    let mut seqs = PackedNSeqVec::default();
+    let mut dna = vec![];
+    let mut qual = vec![];
     let mut reader =
         parse_fastx_file(fastx1).unwrap_or_else(|_| panic!("Invalid path/file: {fastx1}"));
 
+    let mut seqs = PackedNSeqVec::default();
+
     if min_qual == 0 || !reads {
         while let Some(record) = reader.next() {
-            seqs.push_ascii(&record.expect("Invalid FASTA/Q record").seq());
-            seqs.push_ascii(b"N");
+            dna.extend_from_slice(&record.expect("Invalid FASTA/Q record").seq());
+            dna.push(b'N');
+            if dna.len() > 16000 {
+                seqs.push_ascii(&dna);
+                dna.clear();
+            }
         }
 
         if fastx2.is_some() {
             let mut reader = parse_fastx_file(fastx2.as_ref().unwrap())
                 .unwrap_or_else(|_| panic!("Invalid path/file"));
             while let Some(record) = reader.next() {
-                seqs.push_ascii(&record.expect("Invalid FASTA/Q record").seq());
-                seqs.push_ascii(b"N");
+                dna.extend_from_slice(&record.expect("Invalid FASTA/Q record").seq());
+                dna.push(b'N');
+                if dna.len() > 16000 {
+                    seqs.push_ascii(&dna);
+                    dna.clear();
+                }
             }
         }
     } else {
-        let min_qual_usize = min_qual as usize;
         while let Some(record) = reader.next() {
             let seqrec = record.expect("Invalid FASTA/Q record");
-            seqs.push_from_ascii_and_quality(
-                &seqrec.seq(),
-                &seqrec.qual().unwrap(),
-                min_qual_usize,
-            );
+            dna.extend_from_slice(&seqrec.seq());
+            qual.extend_from_slice(&seqrec.qual().unwrap());
+            dna.push(b'N');
+            qual.push(0);
+
+            if dna.len() > 16000 {
+                seqs.push_from_ascii_and_quality(&dna, &qual, min_qual as usize);
+                dna.clear();
+                qual.clear();
+            }
         }
 
         if fastx2.is_some() {
@@ -66,13 +81,26 @@ pub fn sketch_with_simd(
                 .unwrap_or_else(|_| panic!("Invalid second path/file"));
             while let Some(record) = reader.next() {
                 let seqrec = record.expect("Invalid FASTA/Q record");
-                seqs.push_from_ascii_and_quality(
-                    &seqrec.seq(),
-                    &seqrec.qual().unwrap(),
-                    min_qual_usize,
-                );
+                dna.extend_from_slice(&seqrec.seq());
+                qual.extend_from_slice(&seqrec.qual().unwrap());
+                dna.push(b'N');
+                qual.push(0);
+
+                if dna.len() > 16000 {
+                    seqs.push_from_ascii_and_quality(&dna, &qual, min_qual as usize);
+                    dna.clear();
+                    qual.clear();
+                }
             }
         }
+    }
+
+    assert_eq!(dna.len(), qual.len());
+
+    if dna.len() > 0 {
+        seqs.push_from_ascii_and_quality(&dna, &qual, min_qual as usize);
+        dna.clear();
+        qual.clear();
     }
 
     // Run the sketching // NOTE TODO: there is no filtering for the reads, apart from quality! I.e., the difference on counts is zero!
