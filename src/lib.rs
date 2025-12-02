@@ -183,8 +183,8 @@ pub fn main() -> Result<(), Error> {
     if args.quiet {
         simple_logger::init_with_level(log::Level::Error).unwrap();
     } else if args.verbose {
-        simple_logger::init_with_level(log::Level::Info).unwrap();
-        // simple_logger::init_with_level(log::Level::Trace).unwrap();
+        // simple_logger::init_with_level(log::Level::Info).unwrap();
+        simple_logger::init_with_level(log::Level::Debug).unwrap();
     } else {
         simple_logger::init_with_level(log::Level::Warn).unwrap();
     }
@@ -244,6 +244,7 @@ pub fn main() -> Result<(), Error> {
                 &seq_type,
                 rc,
                 *min_count,
+                // *est_coverage,
                 *min_qual,
                 args.quiet,
             );

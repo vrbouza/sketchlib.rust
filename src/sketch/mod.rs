@@ -321,6 +321,7 @@ pub fn sketch_files(
     seq_type: &HashType,
     rc: bool,
     min_count: u16,
+    // est_coverage: usize,
     min_qual: u8,
     quiet: bool,
 ) -> Vec<Sketch> {
@@ -356,7 +357,8 @@ pub fn sketch_files(
                 k : *ik,
                 s : sketch_size as usize,
                 b : BBITS as usize,
-                duplicate : false,
+                seed : 0,
+                count : min_count as usize,
                 coverage: 1,
                 filter_empty: true,
                 filter_out_n: true,
@@ -422,7 +424,8 @@ pub fn sketch_files(
                         HashType::DNA => {
                             // Note that we must not pass as reference the sketchers, as those might be used simultaneously by several parallel threads,
                             // and we might be processing reads and assemblies mixed!
-                            vec![sketch_with_simd(name, fastx1, fastx2, min_qual, min_count, sketchers.clone().unwrap())]
+                            // vec![sketch_with_simd(name, fastx1, fastx2, min_qual, est_coverage, sketchers.clone().unwrap())]
+                            vec![sketch_with_simd(name, fastx1, fastx2, min_qual, sketchers.clone().unwrap())]
                         }
                     }
                 })

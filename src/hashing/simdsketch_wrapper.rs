@@ -1,11 +1,13 @@
-use simd_sketch::{Sketch as Sketch_simd, SketchParams};
+// Wrapper around the simd-sketch crate to provide sketching for DNA sequences
+
+use simd_sketch::SketchParams;
 use needletail::{parser::Format, parse_fastx_file};
-use packed_seq::{PackedSeqVec, PackedNSeqVec, SeqVec};
+use packed_seq::PackedNSeqVec;
 use crate::sketch::Sketch;
 
 /// Wrapper around simd_sketch to make DNA sketches
-pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>, min_qual: u8, 
-                        min_count: u16, mut sketchers: Vec<SketchParams>) -> Sketch {
+pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>, min_qual: u8, //est_coverage : usize,
+    mut sketchers: Vec<SketchParams>) -> Sketch {
 
     let mut reader_peek =
         parse_fastx_file(fastx1).unwrap_or_else(|_| panic!("Invalid path/file: {}", fastx1));
@@ -17,21 +19,20 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
     if seq_peek.format() == Format::Fastq {
         reads = true;
         for is in sketchers.iter_mut() {
-            if min_count != 0 {
-                is.duplicate = true;
-            }
-            is.coverage = 30;
+            // is.coverage = est_coverage;
+            is.coverage = 10000;
         }
     } else {
         for is in sketchers.iter_mut() {
-            is.duplicate = false;
+            is.coverage = 1;
         }
     }
-    let simdsketches: Vec<Sketch_simd>;
+
+    let mut seqs : Vec<PackedNSeqVec> = vec![];
     let mut reader =
         parse_fastx_file(fastx1).unwrap_or_else(|_| panic!("Invalid path/file: {fastx1}"));
+    
     if min_qual == 0 || !reads {
-        let mut seqs = vec![];
         while let Some(record) = reader.next() {
             seqs.push(PackedNSeqVec::from_ascii(&record.expect("Invalid FASTA/Q record").seq()));
         }
@@ -44,28 +45,11 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
             }
         }
 
-        let seqslices = seqs.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
-
-        // Run the sketching // NOTE TODO: there is no filtering for the reads, apart from quality! I.e., the difference on counts is zero!
-        simdsketches = sketchers.iter().map(|is| {
-            is.build().sketch_seqs(&seqslices)
-        }).collect::<Vec<_>>();
     } else {
-        let mut seqs = vec![];
+        let min_qual_usize = min_qual as usize;
         while let Some(record) = reader.next() {
             let seqrec = record.expect("Invalid FASTA/Q record");
-            let mut tmpseq = Vec::new();
-            for (base, qual) in seqrec.seq().iter().zip(seqrec.qual().unwrap()) {
-                if *qual >= min_qual {
-                    tmpseq.push(*base);
-                } else {
-                    seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-                    tmpseq.clear();
-                }
-            }
-            if !tmpseq.is_empty() {
-                seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-            }
+            seqs.push(PackedNSeqVec::from_ascii_and_quality(&seqrec.seq(), &seqrec.qual().unwrap(), min_qual_usize));
         }
 
         if fastx2.is_some() {
@@ -73,27 +57,17 @@ pub fn sketch_with_simd(name: &String, fastx1: &String, fastx2: &Option<String>,
                 parse_fastx_file(fastx2.as_ref().unwrap()).unwrap_or_else(|_| panic!("Invalid second path/file"));
             while let Some(record) = reader.next() {
                 let seqrec = record.expect("Invalid FASTA/Q record");
-                let mut tmpseq = Vec::new();
-                for (base, qual) in seqrec.seq().iter().zip(seqrec.qual().unwrap()) {
-                    if *qual >= min_qual {
-                        tmpseq.push(*base);
-                    } else {
-                        seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-                        tmpseq.clear();
-                    }
-                }
-                if !tmpseq.is_empty() {
-                    seqs.push(PackedSeqVec::from_ascii(&tmpseq));
-                }
+                seqs.push(PackedNSeqVec::from_ascii_and_quality(&seqrec.seq(), &seqrec.qual().unwrap(), min_qual_usize));
             }
         }
-        let seqslices = seqs.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
-
-        // Run the sketching // NOTE TODO: there is no filtering for the reads, apart from quality! I.e., the difference on counts is zero!
-        simdsketches = sketchers.iter().map(|is| {
-            is.build().sketch_seqs(&seqslices)
-        }).collect::<Vec<_>>();
     }
+
+    let seqslices = seqs.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
+
+    // Run the sketching // NOTE TODO: there is no filtering for the reads, apart from quality! I.e., the difference on counts is zero!
+    let simdsketches = sketchers.iter().map(|is| {
+        is.build().sketch_seqs(&seqslices)
+    }).collect::<Vec<_>>();
 
     // Get sketchlib.rust sketch objects
     Sketch::from_sketch_simd(&simdsketches, &name.to_string(), reads)

@@ -63,9 +63,11 @@ num_cpus = "1.0"
 
 
 simd-sketch.git = "https://github.com/ragnargrootkoerkamp/simd-sketch"
-packed-seq = "https://github.com/rust-seq/packed-seq"
+packed-seq = "4.1.0"
 
-
+[patch.crates-io]
+simd-sketch.git = "https://github.com/ragnargrootkoerkamp/simd-sketch"
+packed-seq.git = "https://github.com/rust-seq/packed-seq"
 
 [build-dependencies]
 pyo3-build-config = {version = "0.22", optional = true}
@@ -83,3 +85,4 @@ approx = "0.5"
 lto = true
 strip = false # could be changed in future
 codegen-units = 1
+debug = true
