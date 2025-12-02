@@ -814,8 +814,8 @@ pub fn main() -> Result<(), Error> {
     log::info!("Complete");
     if print_success && !args.quiet {
         eprintln!(
-            "🧬🖋️ sketchlib done in {}s",
-            end.duration_since(start).as_secs()
+            "🧬🖋️ sketchlib done in {:.1}s",
+            end.duration_since(start).as_secs_f32()
         );
     }
     result
