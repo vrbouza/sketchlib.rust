@@ -63,7 +63,7 @@ num_cpus = "1.0"
 
 
 simd-sketch.git = "https://github.com/ragnargrootkoerkamp/simd-sketch"
-packed-seq = "4.1.0"
+packed-seq = "https://github.com/rust-seq/packed-seq"
 
 
 

@@ -359,7 +359,7 @@ pub fn sketch_files(
                 duplicate : false,
                 coverage: 1,
                 filter_empty: true,
-                filter_out_n: false,
+                filter_out_n: true,
             }).collect::<Vec<_>>())
     } else {
         None
