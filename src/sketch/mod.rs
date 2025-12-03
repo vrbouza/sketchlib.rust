@@ -321,8 +321,8 @@ pub fn sketch_files(
     seq_type: &HashType,
     rc: bool,
     min_count: u16,
-    // est_coverage: usize,
     min_qual: u8,
+    est_coverage: usize,
     quiet: bool,
 ) -> Vec<Sketch> {
     let bin_stride = 1;
@@ -425,7 +425,7 @@ pub fn sketch_files(
                             // Note that we must not pass as reference the sketchers, as those might be used simultaneously by several parallel threads,
                             // and we might be processing reads and assemblies mixed!
                             // vec![sketch_with_simd(name, fastx1, fastx2, min_qual, est_coverage, sketchers.clone().unwrap())]
-                            vec![sketch_with_simd(name, fastx1, fastx2, min_qual, sketchers.clone().unwrap())]
+                            vec![sketch_with_simd(name, fastx1, fastx2, min_qual, est_coverage, sketchers.clone().unwrap())]
                         }
                     }
                 })

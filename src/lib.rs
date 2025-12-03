@@ -206,6 +206,7 @@ pub fn main() -> Result<(), Error> {
             single_strand,
             min_count,
             min_qual,
+            est_coverage,
             threads,
         } => {
             if *concat_fasta && matches!(*seq_type, HashType::DNA | HashType::PDB) {
@@ -244,8 +245,8 @@ pub fn main() -> Result<(), Error> {
                 &seq_type,
                 rc,
                 *min_count,
-                // *est_coverage,
                 *min_qual,
+                *est_coverage,
                 args.quiet,
             );
             let sketch_vec = MultiSketch::new(&mut sketches, sketch_bins, &kmers, seq_type);
@@ -660,6 +661,7 @@ pub fn main() -> Result<(), Error> {
             single_strand,
             min_count,
             min_qual,
+            est_coverage,
             concat_fasta,
             threads,
             level,
@@ -715,6 +717,7 @@ pub fn main() -> Result<(), Error> {
                 rc,
                 *min_count,
                 *min_qual,
+                *est_coverage,
                 args.quiet,
             );
             let mut db2_metadata =
