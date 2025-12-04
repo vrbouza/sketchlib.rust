@@ -424,8 +424,12 @@ pub fn sketch_files(
                         HashType::DNA => {
                             // Note that we must not pass as reference the sketchers, as those might be used simultaneously by several parallel threads,
                             // and we might be processing reads and assemblies mixed!
-                            // vec![sketch_with_simd(name, fastx1, fastx2, min_qual, est_coverage, sketchers.clone().unwrap())]
-                            vec![sketch_with_simd(name, fastx1, fastx2, min_qual, est_coverage, sketchers.clone().unwrap())]
+                            let (reads, sketches_simd) = sketch_with_simd(fastx1, fastx2, min_qual, est_coverage, sketchers.clone().unwrap());
+                            vec![Sketch::from_sketch_simd(
+                                &sketches_simd, 
+                                &name.to_string(), 
+                                reads
+                            )]
                         }
                     }
                 })

@@ -11,17 +11,19 @@ use roaring::{RoaringBitmap, RoaringTreemap};
 use serde::{Deserialize, Serialize};
 
 use super::hashing::{
-    bloom_filter::KmerFilter, nthash_iterator::NtHashIterator, HashType, RollHash,
+    HashType, simdsketch_wrapper::sketch_with_simd
 };
 use crate::distances::distance_matrix::square_to_condensed;
 use crate::io::InputFastx;
-use crate::sketch::{sketch_datafile::SketchArrayWriter, Sketch};
+use crate::sketch::{sketch_datafile::SketchArrayWriter, BBITS};
 use crate::utils::get_progress_bar;
 use anyhow::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 
 type InvSketches = (Vec<Vec<u16>>, Vec<String>);
+
+use simd_sketch::{SketchParams, Sketch as Sketch_simd, SketchAlg, BitSketch};
 
 /// An inverted index and associated metadata
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
@@ -50,6 +52,7 @@ impl Inverted {
         rc: bool,
         min_count: u16,
         min_qual: u8,
+        est_coverage: usize,
         quiet: bool,
     ) -> Self {
         log::info!("Creating sketches");
@@ -62,6 +65,7 @@ impl Inverted {
             rc,
             min_count,
             min_qual,
+            est_coverage,
             quiet,
         );
         if let Some(skq_file) = write_skq {
@@ -92,6 +96,7 @@ impl Inverted {
         input_files: &[InputFastx],
         min_count: u16,
         min_qual: u8,
+        est_coverage: usize,
         quiet: bool,
     ) -> InvSketches {
         let file_order: Vec<usize> = (0..input_files.len()).collect();
@@ -104,6 +109,7 @@ impl Inverted {
             self.rc,
             min_count,
             min_qual,
+            est_coverage,
             quiet,
         )
     }
@@ -239,51 +245,53 @@ impl Inverted {
         rc: bool,
         min_count: u16,
         min_qual: u8,
+        est_coverage: usize,
         quiet: bool,
     ) -> InvSketches {
         let (tx, rx) = mpsc::channel();
 
         let percent = false;
         let progress_bar = get_progress_bar(input_files.len(), percent, quiet);
+        if *seq_type != HashType::DNA {
+            panic!("Inverted index only available to DNA sequences.");
+        }
+        let sketchers = Some(vec![SketchParams {
+            alg: SketchAlg::Bucket,
+            rc: rc,
+            k : k,
+            s : sketch_size as usize,
+            b : BBITS as usize,
+            seed : 0,
+            count : min_count as usize,
+            coverage: 1,
+            filter_empty: true,
+            filter_out_n: true,
+        }]);
+
         rayon::scope(|s| {
             s.spawn(move |_| {
                 input_files
                     .par_iter()
                     .zip(file_order)
                     .progress_with(progress_bar)
-                    .map(|((name, fastx1, fastx2), genome_idx)| {
-                        let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
-                            HashType::DNA => {
-                                NtHashIterator::new((fastx1, fastx2.as_ref()), rc, min_qual)
-                                    .into_iter()
-                                    .map(|it| Box::new(it) as Box<dyn RollHash>)
-                                    .collect()
-                            }
-                            _ => unimplemented!("Inverted index only supported for DNA"),
-                        };
+                    .map(|((_, fastx1, fastx2), genome_idx)| {
+                        // This could be nicer. It is essentially Sketch::from_sketch_simd, but w/o a couple things
+                        // This vec has a single element always
+                        let (_reads, vec) = sketch_with_simd(fastx1, fastx2, min_qual, est_coverage, sketchers.clone().unwrap());
 
-                        if let Some(hash_it) = hash_its.first_mut() {
-                            if hash_it.seq_len() == 0 {
-                                panic!("Genome {genome_idx} has no valid sequence");
-                            }
-
-                            let mut read_filter = if hash_it.reads() {
-                                let mut filter = KmerFilter::new(min_count);
-                                filter.init();
-                                Some(filter)
-                            } else {
-                                None
-                            };
-
-                            let (signs, densified) =
-                                Sketch::get_signs(&mut **hash_it, k, &mut read_filter, sketch_size);
-                            if densified {
-                                log::trace!("{name} was densified");
-                            }
-                            (*genome_idx, signs)
-                        } else {
-                            panic!("Empty hash iterator for {name}");
+                        let inputsketchs;
+                        match &vec[0] {
+                            Sketch_simd::BottomSketch(_sketch) => panic!("We only support BucketSketch at this moment."),
+                            Sketch_simd::BucketSketch(sketch) => inputsketchs = &sketch.buckets,
                         }
+
+                        let signs;
+                        match inputsketchs {
+                            BitSketch::B16(thevec) => signs = thevec,
+                            _ => panic!("Only supporting 16 bits as bin size at this moment.")
+                        }
+
+                        (*genome_idx, signs.clone())
                     })
                     .for_each_with(tx, |tx, result| {
                         let _ = tx.send(result);
@@ -293,8 +301,7 @@ impl Inverted {
 
         let mut sketch_results = vec![Vec::new(); input_files.len()];
         while let Ok((genome_idx, sketch)) = rx.recv() {
-            let sketch_u16 = sketch.iter().map(|h| *h as u16).collect();
-            sketch_results[genome_idx] = sketch_u16;
+            sketch_results[genome_idx] = sketch;
         }
 
         // Sample names in the correct order

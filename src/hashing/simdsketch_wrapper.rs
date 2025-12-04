@@ -1,20 +1,18 @@
 //! Wrapper around the simd-sketch crate to provide sketching for DNA sequences
 
-use crate::sketch::Sketch;
 use needletail::{parse_fastx_file, parser::Format};
 use packed_seq::PackedNSeqVec;
-use simd_sketch::SketchParams;
+use simd_sketch::{SketchParams, Sketch as Sketch_simd};
 use std::path::Path;
 
 /// Wrapper around simd_sketch to make DNA sketches
 pub fn sketch_with_simd(
-    name: &String,
     fastx1: &String,
     fastx2: &Option<String>,
     min_qual: u8,
     est_coverage: usize,
     mut sketchers: Vec<SketchParams>,
-) -> Sketch {
+) -> (bool, Vec<Sketch_simd>) {
     let mut reader_peek =
         parse_fastx_file(fastx1).unwrap_or_else(|_| panic!("Invalid path/file: {}", fastx1));
     let seq_peek = reader_peek
@@ -55,7 +53,7 @@ pub fn sketch_with_simd(
     }
     
     // // Run the sketching
-    let simdsketches = sketchers
+    let sketches = sketchers
         .iter()
         .map(|is| {
             if seqs2.is_some() {
@@ -64,7 +62,5 @@ pub fn sketch_with_simd(
                 is.build().sketch(seqs.as_slice())
             }
         }).collect::<Vec<_>>();
-
-    // Get sketchlib.rust sketch objects
-    Sketch::from_sketch_simd(&simdsketches, &name.to_string(), reads)
+        (reads, sketches)
 }
