@@ -233,6 +233,7 @@ impl Sketch {
     // TODO could use newer method
     // http://proceedings.mlr.press/v115/mai20a.html
     // https://github.com/zhaoxiaofei/bindash/blob/eb4f81e50b3c42a1fdc00901290b35d0fa9a1e8d/src/hashutils.hpp#L109
+    /// Densifies an array of bines 
     pub fn densify_bin(signs: &mut [u64]) -> bool {
         let mut minval = u64::MAX;
         let mut maxval = 0;

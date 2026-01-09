@@ -487,7 +487,7 @@ pub fn main() -> Result<(), Error> {
                         .zip(&input_files)
                         .for_each(|(idx, (name, _))| {
                             // log::info!("{:?} {:?}", name, idx);
-                            tmpvec[*idx] = tmpdict.get(name).unwrap().clone();
+                            tmpvec[*idx] = tmpdict.get(name).unwrap_or(&"".to_owned()).clone();
                         });
                     species_labels_vec = Some(tmpvec);
                 } else {

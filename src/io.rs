@@ -116,7 +116,7 @@ pub fn reorder_input_files(
 
         outdict = Some(map_names_labels);
     }
-
+    
     (sample_order, outdict)
 }
 
@@ -359,16 +359,16 @@ fn test_reorder_input_files() {
     .expect("Failed to write to temp file");
 
     let input_files = vec![
-        ("sample1".to_string(), "assembly1.fa".to_string(), None),
-        ("sample2".to_string(), "assembly2.fa".to_string(), None),
-        ("sample3".to_string(), "assembly3.fa".to_string(), None),
-        ("sample4".to_string(), "assembly4.fa".to_string(), None),
-        ("sample5".to_string(), "assembly5.fa".to_string(), None),
+        ("sample1".to_string(), vec!["assembly1.fa".to_string()]),
+        ("sample2".to_string(), vec!["assembly2.fa".to_string()]),
+        ("sample3".to_string(), vec!["assembly3.fa".to_string()]),
+        ("sample4".to_string(), vec!["assembly4.fa".to_string()]),
+        ("sample5".to_string(), vec!["assembly5.fa".to_string()]),
     ];
 
     let species_name_file = temp_file.path().to_str().unwrap();
     let reordered_indices = reorder_input_files(&input_files, species_name_file);
-
-    assert_eq!(reordered_indices.len(), input_files.len());
-    assert_eq!(reordered_indices, vec![0, 2, 1, 3, 4]) // 1(A), 3(A), 2(B), 4(C), 5(NA) (sample6 not included)
+    
+    assert_eq!(reordered_indices.0.len(), input_files.len());
+    assert_eq!(reordered_indices.0, vec![0, 2, 1, 3, 4]) // 1(A), 3(A), 2(B), 4(C), 5(NA) (sample6 not included)
 }
