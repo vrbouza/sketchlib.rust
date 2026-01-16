@@ -1,5 +1,8 @@
 //! The class to support .ski creation, reading and writing, containing an inverted
 //! index of multiple sketches
+#[cfg(target_arch = "wasm32")]
+use std::fmt;
+#[cfg(not(target_arch = "wasm32"))]
 use std::{fmt, cmp};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::mpsc;
@@ -7,6 +10,9 @@ use std::sync::mpsc;
 #[cfg(not(target_arch = "wasm32"))]
 extern crate needletail;
 
+#[cfg(target_arch = "wasm32")]
+use hashbrown::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
 use hashbrown::{HashMap, HashSet};
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;

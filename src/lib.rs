@@ -154,6 +154,7 @@ use crate::cli::{DEFAULT_MINCOUNT, DEFAULT_MINQUAL, InvertedQueryType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::hashing::HashType;
 
+#[cfg(not(target_arch = "wasm32"))]
 use hashbrown::HashSet;
 
 pub mod sketch;
