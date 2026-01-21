@@ -78,6 +78,21 @@ mod tests {
             .arg("-v")
             .assert()
             .stdout_eq(sandbox.snapbox_file("read_sketch_full_info.stdout", TestDir::Correct));
+
+        // Test now that when more than two read files per sample, it crashes (NOT prepared to do that, at least for the moment)
+
+        // Create a BAD fastq rfile in the tmp dir
+        let rfile_name = sandbox.create_bad_fastq_rfile("testbad");
+        Command::new(cmd::cargo_bin!("sketchlib"))
+            .current_dir(sandbox.get_wd())
+            .arg("sketch")
+            .arg("-f")
+            .arg(rfile_name)
+            .arg("-o")
+            .arg("reads")
+            .args(["--min-count", "2", "-v", "-k", "9", "--min-qual", "2"])
+            .assert()
+            .failure();
     }
 
     #[test]
