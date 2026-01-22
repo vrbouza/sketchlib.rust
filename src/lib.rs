@@ -155,7 +155,7 @@ use crate::cli::{DEFAULT_MINCOUNT, DEFAULT_MINQUAL, InvertedQueryType};
 use crate::hashing::HashType;
 
 #[cfg(not(target_arch = "wasm32"))]
-use hashbrown::HashSet;
+use hashbrown::{HashSet, HashMap};
 
 pub mod sketch;
 #[cfg(not(target_arch = "wasm32"))]
@@ -475,7 +475,24 @@ pub fn main() -> Result<(), Error> {
                 let (file_order, map_names_labels) = if let Some(species_name_file) = species_names {
                     reorder_input_files(&input_files, species_name_file)
                 } else {
-                    ((0..input_files.len()).collect(), None)
+                    // Check first if there are repeated samples
+
+                    let tmpnamesset = input_files.iter().map(|x| x.0.clone()).collect::<HashSet<String>>();
+                    if tmpnamesset.len() == input_files.len() {
+                        ((0..input_files.len()).collect(), None)
+                    } else {
+                        let mut tmpoutvec: Vec<usize> = vec![0; input_files.len()];
+                        let mut tmpmap : HashMap<String, usize> = HashMap::new();
+
+                        for (i, name) in tmpnamesset.iter().enumerate() {
+                            tmpmap.insert(name.clone(), i);
+                        }
+                        for i in 0..tmpoutvec.len() {
+                            tmpoutvec[i] = tmpmap[&input_files[i].0];
+                        }
+
+                        (tmpoutvec, None)
+                    }
                 };
 
                 // If species labels were provided, create the list of them

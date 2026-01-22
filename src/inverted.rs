@@ -323,7 +323,6 @@ impl Inverted {
                 differentsamples.insert(i.0.clone());
             }
         }
-
         let (tx, rx) = mpsc::channel();
 
         let percent = false;

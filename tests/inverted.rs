@@ -109,6 +109,7 @@ mod tests {
         sandbox.copy_input_file_to_wd("14412_3#82.contigs_velvet.fa.gz");
         sandbox.copy_input_file_to_wd("14412_3#84.contigs_velvet.fa.gz");
         sandbox.copy_input_file_to_wd("R6.fa.gz");
+        sandbox.copy_input_file_to_wd("TIGR4.fa.gz");
         sandbox.copy_input_file_to_wd("rfile_multi.txt");
 
         // This shouldn't give an error, but it is an unfortunate situation with respect to the species-names file the user provided
@@ -118,7 +119,7 @@ mod tests {
             .arg("build")
             .arg("-o")
             .arg("inverted")
-            .args(["-v", "-k", "31"])
+            .args(["-v", "-k", "31", "-s", "1000"])
             .args(["-f", "rfile_multi.txt"])
             .assert()
             .success();
