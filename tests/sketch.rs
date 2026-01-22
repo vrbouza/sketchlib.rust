@@ -100,6 +100,47 @@ mod tests {
     }
 
     #[test]
+    fn sketch_aas() {
+        let sandbox = TestSetup::setup();
+
+        sandbox.copy_input_file_to_wd("test_aa_sequence.fa");
+
+        Command::new(cmd::cargo_bin!("sketchlib"))
+            .current_dir(sandbox.get_wd())
+            .arg("sketch")
+            .args(["-o", "aastest"])
+            .args(["--seq-type", "aa"])
+            .args(["--min-count", "2", "-v", "--k-vals", "9", "--min-qual", "2"])
+            .arg("./test_aa_sequence.fa")
+            .assert()
+            .success();
+
+        // check level 2
+        Command::new(cmd::cargo_bin!("sketchlib"))
+            .current_dir(sandbox.get_wd())
+            .arg("sketch")
+            .args(["-o", "aastest"])
+            .args(["--seq-type", "aa"])
+            .args(["--level", "level2"])
+            .args(["--min-count", "2", "-v", "--k-vals", "9", "--min-qual", "2"])
+            .arg("./test_aa_sequence.fa")
+            .assert()
+            .success();
+
+        // check level 3
+        Command::new(cmd::cargo_bin!("sketchlib"))
+            .current_dir(sandbox.get_wd())
+            .arg("sketch")
+            .args(["-o", "aastest"])
+            .args(["--seq-type", "aa"])
+            .args(["--level", "level3"])
+            .args(["--min-count", "2", "-v", "--k-vals", "9", "--min-qual", "2"])
+            .arg("./test_aa_sequence.fa")
+            .assert()
+            .success();
+    }
+
+    #[test]
     /// Check that older databases can still be read correctly
     /// (some fields added on .skm in v0.2.0)
     fn legacy_databases() {
