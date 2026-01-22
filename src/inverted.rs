@@ -501,16 +501,19 @@ impl Inverted {
     }
 
     /// Get the sample names, with the same order as in the index
+    #[cfg(target_arch = "wasm32")]
     pub fn get_sample_names(&self) -> &Vec<String> {
         &self.sample_names
     }
 
     /// Get the metadata, with the same order as in the index
+    #[cfg(target_arch = "wasm32")]
     pub fn get_metadata(&self) -> &Option<Vec<String>> {
         &self.metadata
     }
 
     /// Get the sample labels, with the same order as in the index
+    #[cfg(target_arch = "wasm32")]
     pub fn get_sample_labels(&self) -> &Option<Vec<String>> {
         &self.labels
     }

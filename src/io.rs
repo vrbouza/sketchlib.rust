@@ -26,9 +26,7 @@ pub fn read_input_fastas(seq_files: &[String]) -> Vec<InputFastx> {
     for file in seq_files {
         let caps = re_path.captures(file).or(re_name.captures(file));
         let name = match caps {
-            Some(capture) => {
-                capture[1].to_string()
-            },
+            Some(capture) => capture[1].to_string(),
             None => file.to_string(),
         };
         input_files.push((name, vec![file.to_string()]));
