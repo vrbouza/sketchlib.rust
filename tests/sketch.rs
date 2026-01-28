@@ -78,7 +78,6 @@ mod tests {
             .arg("-v")
             .assert()
             .stdout_eq(sandbox.snapbox_file("read_sketch_full_info.stdout", TestDir::Correct));
-
     }
 
     #[test]
@@ -86,7 +85,7 @@ mod tests {
         let sandbox = TestSetup::setup();
 
         let rfile_name_bad = sandbox.create_bad_fastq_rfile("test");
-        
+
         Command::new(cmd::cargo_bin!("sketchlib"))
             .current_dir(sandbox.get_wd())
             .arg("sketch")

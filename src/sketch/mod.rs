@@ -233,7 +233,7 @@ impl Sketch {
     // TODO could use newer method
     // http://proceedings.mlr.press/v115/mai20a.html
     // https://github.com/zhaoxiaofei/bindash/blob/eb4f81e50b3c42a1fdc00901290b35d0fa9a1e8d/src/hashutils.hpp#L109
-    /// Densifies an array of bines 
+    /// Densifies an array of bins
     pub fn densify_bin(signs: &mut [u64]) -> bool {
         let mut minval = u64::MAX;
         let mut maxval = 0;
@@ -330,14 +330,12 @@ pub fn sketch_files(
                 .map(|(idx, (name, fastxvec))| {
                     // Read in sequence and set up rolling hash by alphabet type
                     let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
-                        HashType::DNA => {
-                            NtHashIterator::new(&fastxvec, rc, min_qual)
-                                .into_iter()
-                                .map(|it| Box::new(it) as Box<dyn RollHash>)
-                                .collect()
-                        }
+                        HashType::DNA => NtHashIterator::new(fastxvec, rc, min_qual)
+                            .into_iter()
+                            .map(|it| Box::new(it) as Box<dyn RollHash>)
+                            .collect(),
                         HashType::AA(level) => {
-                            AaHashIterator::new(&fastxvec, level.clone(), concat_fasta)
+                            AaHashIterator::new(fastxvec, level.clone(), concat_fasta)
                                 .into_iter()
                                 .map(|it| Box::new(it) as Box<dyn RollHash>)
                                 .collect()
@@ -350,7 +348,7 @@ pub fn sketch_files(
                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
                                     .collect()
                             } else {
-                                AaHashIterator::from_3di_file(&fastxvec)
+                                AaHashIterator::from_3di_file(fastxvec)
                                     .into_iter()
                                     .map(|it| Box::new(it) as Box<dyn RollHash>)
                                     .collect()

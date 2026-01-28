@@ -3,9 +3,9 @@
 #[cfg(target_arch = "wasm32")]
 use std::fmt;
 #[cfg(not(target_arch = "wasm32"))]
-use std::{fmt, cmp};
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::mpsc;
+#[cfg(not(target_arch = "wasm32"))]
+use std::{cmp, fmt};
 
 #[cfg(not(target_arch = "wasm32"))]
 extern crate needletail;
@@ -27,10 +27,10 @@ use super::hashing::{
 use crate::distances::distance_matrix::square_to_condensed;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::io::InputFastx;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::sketch::{sketch_datafile::SketchArrayWriter, Sketch};
 #[cfg(target_arch = "wasm32")]
 use crate::sketch::Sketch;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::sketch::{sketch_datafile::SketchArrayWriter, Sketch};
 use crate::utils::get_progress_bar;
 use anyhow::Error;
 use std::fs::File;
@@ -146,12 +146,11 @@ impl Inverted {
         min_qual: u8,
         quiet: bool,
     ) -> InvSketches {
-        let file_order : Vec<usize>;
-        if input_files.1.is_some() {
-            file_order = vec![0, 1];
+        let file_order: Vec<usize> = if input_files.1.is_some() {
+            vec![0, 1]
         } else {
-            file_order = vec![0];
-        }
+            vec![0]
+        };
 
         Self::sketch_files_inverted(
             input_files,
@@ -312,9 +311,8 @@ impl Inverted {
         min_qual: u8,
         quiet: bool,
     ) -> InvSketches {
-
-        let mut multientrysamples : HashSet<String> = HashSet::new();
-        let mut differentsamples  : HashSet<String> = HashSet::new();
+        let mut multientrysamples: HashSet<String> = HashSet::new();
+        let mut differentsamples: HashSet<String> = HashSet::new();
 
         for i in input_files.iter() {
             if differentsamples.contains(&i.0) {
@@ -335,12 +333,10 @@ impl Inverted {
                     .progress_with(progress_bar)
                     .map(|((name, fastxvec), genome_idx)| {
                         let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
-                            HashType::DNA => {
-                                NtHashIterator::new(&fastxvec, rc, min_qual)
-                                    .into_iter()
-                                    .map(|it| Box::new(it) as Box<dyn RollHash>)
-                                    .collect()
-                            }
+                            HashType::DNA => NtHashIterator::new(fastxvec, rc, min_qual)
+                                .into_iter()
+                                .map(|it| Box::new(it) as Box<dyn RollHash>)
+                                .collect(),
                             _ => unimplemented!("Inverted index only supported for DNA"),
                         };
 
@@ -357,9 +353,12 @@ impl Inverted {
                                 None
                             };
 
-                            // let (signs, densified) =
-                            //     Sketch::get_signs(&mut **hash_it, k, &mut read_filter, sketch_size);
-                            let signs = Sketch::get_signs_no_densify(&mut **hash_it, k, &mut read_filter, sketch_size);
+                            let signs = Sketch::get_signs_no_densify(
+                                &mut **hash_it,
+                                k,
+                                &mut read_filter,
+                                sketch_size,
+                            );
                             // if densified {
                             //     log::trace!("{name} was densified");
                             // }
@@ -374,8 +373,9 @@ impl Inverted {
             });
         });
 
-        let mut sketch_results : Vec<Vec<u16>> = vec![Vec::with_capacity(sketch_size as usize); differentsamples.len()];
-        let mut indexes : HashSet<usize> = HashSet::with_capacity(multientrysamples.len());
+        let mut sketch_results: Vec<Vec<u16>> =
+            vec![Vec::with_capacity(sketch_size as usize); differentsamples.len()];
+        let mut indexes: HashSet<usize> = HashSet::with_capacity(multientrysamples.len());
         while let Ok((genome_idx, mut sketch, name)) = rx.recv() {
             if differentsamples.contains(name) {
                 // Not yet written!
@@ -399,7 +399,7 @@ impl Inverted {
 
         for pos in indexes.iter() {
             // TODO: this is clearly improvable, but I'm going to do it temporarily this way...
-            let mut tmpvec : Vec<u64> = sketch_results[*pos].iter().map(|h| *h as u64).collect();
+            let mut tmpvec: Vec<u64> = sketch_results[*pos].iter().map(|h| *h as u64).collect();
             Sketch::densify_bin(&mut tmpvec[..]);
             sketch_results[*pos] = tmpvec.iter().map(|h| *h as u16).collect();
         }
@@ -415,7 +415,6 @@ impl Inverted {
         (sketch_results, sample_names)
     }
 
-
     #[cfg(target_arch = "wasm32")]
     fn sketch_files_inverted(
         input_files: (&web_sys::File, Option<&web_sys::File>),
@@ -429,12 +428,10 @@ impl Inverted {
         _quiet: bool,
     ) -> InvSketches {
         let mut hash_its: Vec<Box<dyn RollHash>> = match seq_type {
-            HashType::DNA => {
-                NtHashIterator::new(input_files, rc, min_qual)
-                    .into_iter()
-                    .map(|it| Box::new(it) as Box<dyn RollHash>)
-                    .collect()
-            }
+            HashType::DNA => NtHashIterator::new(input_files, rc, min_qual)
+                .into_iter()
+                .map(|it| Box::new(it) as Box<dyn RollHash>)
+                .collect(),
             _ => unimplemented!("Inverted index only supported for DNA"),
         };
 
@@ -454,7 +451,7 @@ impl Inverted {
             let (signs, densified) =
                 Sketch::get_signs(&mut **hash_it, k, &mut read_filter, sketch_size);
             if densified {
-                logw(format!("The query was densified").as_str(), Some("trace"));
+                logw("The query was densified", Some("trace"));
             }
 
             let mut sketch_results = vec![Vec::new(); 1];
@@ -466,7 +463,6 @@ impl Inverted {
             panic!("Empty hash iterator for the query");
         }
     }
-
 
     #[cfg(not(target_arch = "wasm32"))]
     fn build_inverted_index(

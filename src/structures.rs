@@ -40,11 +40,11 @@ pub fn pdb_to_3di(input_files: &[InputFastx]) -> Result<Vec<String>, Error> {
             } else {
                 let mut struct_string = "".to_owned();
                 for file in ftup.1.iter() {
-                    let struct_string_tmp: Py<PyAny> = converter_fun
-                        .call1(py, (ftup.0.clone(), file))
-                        .unwrap();
+                    let struct_string_tmp: Py<PyAny> =
+                        converter_fun.call1(py, (ftup.0.clone(), file)).unwrap();
                     struct_string.push_str(",");
-                    struct_string.push_str(struct_string_tmp.extract::<String>(py).unwrap().as_str());
+                    struct_string
+                        .push_str(struct_string_tmp.extract::<String>(py).unwrap().as_str());
                 }
                 struct_strings.push(struct_string);
             }

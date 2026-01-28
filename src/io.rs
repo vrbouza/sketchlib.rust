@@ -20,9 +20,11 @@ pub type InputFastx = (String, Vec<String>);
 pub fn read_input_fastas(seq_files: &[String]) -> Vec<InputFastx> {
     let mut input_files = Vec::new();
     // matches the file name (no extension) in a full path
-    let re_path = Regex::new(r"^.+/(.+\.(fa|fasta|fa\.gz|fasta\.gz|fastq|fastq\.gz|fq|fq\.gz))$").unwrap();
+    let re_path =
+        Regex::new(r"^.+/(.+\.(fa|fasta|fa\.gz|fasta\.gz|fastq|fastq\.gz|fq|fq\.gz))$").unwrap();
     // matches the file name (no extension) with no path
-    let re_name = Regex::new(r"^(.+\.(fa|fasta|fa\.gz|fasta\.gz|fastq|fastq\.gz|fq|fq\.gz))$").unwrap();
+    let re_name =
+        Regex::new(r"^(.+\.(fa|fasta|fa\.gz|fasta\.gz|fastq|fastq\.gz|fq|fq\.gz))$").unwrap();
     for file in seq_files {
         let caps = re_path.captures(file).or(re_name.captures(file));
         let name = match caps {
@@ -83,7 +85,7 @@ pub fn reorder_input_files(
         reordered_dict.insert(reordered_name, new_idx);
     }
 
-    let mut sample_order : Vec<usize>;
+    let mut sample_order: Vec<usize>;
     let outdict;
     if reordered_dict.is_empty() {
         log::warn!("Could not find any sample names in {species_name_file}");
@@ -105,32 +107,25 @@ pub fn reorder_input_files(
         }
         log::info!(
             "Found {} of {} input samples with given labels",
-            // input_files
-            //     .len()
-            //     .saturating_sub(new_idx - (reordered_dict.len() - 1)),
-            input_files.iter().filter(|name| reordered_dict.contains_key(&name.0)).count(),
+            input_files
+                .iter()
+                .filter(|name| reordered_dict.contains_key(&name.0))
+                .count(),
             input_files.len()
         );
-
-        // log::info!("{:?}", input_files.iter().filter(|name| !reordered_dict.contains_key(&name.0)).map(|el| el).collect::<Vec<_>>());
-
         outdict = Some(map_names_labels);
     }
-    
+
     (sample_order, outdict)
 }
 
 /// Parse the metadata for creating an inverted index, so that we can include them in it
-pub fn parse_metadata_info(
-    metadata_file: &str,
-) -> HashMap<String, String> {
-
-    let f = File::open(metadata_file).unwrap_or_else(|_| {
-        panic!("Unable to open species name file {metadata_file}")
-    });
+pub fn parse_metadata_info(metadata_file: &str) -> HashMap<String, String> {
+    let f = File::open(metadata_file)
+        .unwrap_or_else(|_| panic!("Unable to open species name file {metadata_file}"));
     let f = BufReader::new(f);
     let mut out_dict: HashMap<String, String> = HashMap::new(); // Stores [label, metadata]
-    // Read through labels, saves all metadata in the dictionary
+                                                                // Read through labels, saves all metadata in the dictionary
     for line in f.lines() {
         let line = line.expect("Unable to read line in metadata");
         let fields: Vec<&str> = line.split_terminator("\t").collect();
@@ -141,10 +136,7 @@ pub fn parse_metadata_info(
         }
     }
 
-    log::info!(
-        "Got metadata for {} labels",
-        out_dict.len(),
-    );
+    log::info!("Got metadata for {} labels", out_dict.len(),);
 
     out_dict
 }
@@ -200,40 +192,6 @@ pub fn get_input_list(
         panic!("No input files provided");
     }
     // Read input
-    // match file_list {
-    //     Some(files) => {
-    //         let mut input_files: Vec<InputFastx> = Vec::new();
-    //         let f = File::open(files).unwrap_or_else(|_| {
-    //             panic!(
-    //                 "
-    //         Unable to open file_list {files}"
-    //             )
-    //         });
-    //         let f = BufReader::new(f);
-    //         for line in f.lines() {
-    //             let line = line.expect("Unable to read line in file_list");
-    //             let fields: Vec<&str> = line.split_whitespace().collect();
-    //             // 1 entry: fasta with name = file
-    //             // 2 entries: fasta name, file
-    //             // 3 entries: fastq name, file1, file2
-    //             let parsed_input = match fields.len() {
-    //                 1 => ((fields[0].to_string()), fields[0].to_string(), None),
-    //                 2 => ((fields[0].to_string()), fields[1].to_string(), None),
-    //                 3 => (
-    //                     (fields[0].to_string()),
-    //                     fields[1].to_string(),
-    //                     Some(fields[2].to_string()),
-    //                 ),
-    //                 _ => {
-    //                     panic!("Unable to parse line in file_list")
-    //                 }
-    //             };
-    //             input_files.push(parsed_input);
-    //         }
-    //         input_files
-    //     }
-    //     None => read_input_fastas(seq_files.as_ref().unwrap()),
-    // }
     match file_list {
         Some(files) => {
             let mut input_files: Vec<InputFastx> = Vec::new();
@@ -260,7 +218,7 @@ pub fn get_input_list(
                             tmpvec.push(file.to_string());
                         }
                         ((fields[0].to_string()), tmpvec)
-                    },
+                    }
                 };
                 input_files.push(parsed_input);
             }
@@ -368,7 +326,7 @@ fn test_reorder_input_files() {
 
     let species_name_file = temp_file.path().to_str().unwrap();
     let reordered_indices = reorder_input_files(&input_files, species_name_file);
-    
+
     assert_eq!(reordered_indices.0.len(), input_files.len());
     assert_eq!(reordered_indices.0, vec![0, 2, 1, 3, 4]) // 1(A), 3(A), 2(B), 4(C), 5(NA) (sample6 not included)
 }

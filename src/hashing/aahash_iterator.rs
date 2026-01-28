@@ -81,7 +81,7 @@ impl AaHashIterator {
     }
 
     /// Create a new aaHash iterator from a fasta file, at the set comparison level
-    pub fn new(files: &Vec<String>, level: AaLevel, concat_fasta: bool) -> Vec<Self> {
+    pub fn new(files: &[String], level: AaLevel, concat_fasta: bool) -> Vec<Self> {
         let mut hash_vec = Vec::new();
 
         // Read sequence into memory (as we go through multiple times)
@@ -124,7 +124,7 @@ impl AaHashIterator {
     }
 
     /// Create a new iterator from a 3di embedding file of a structure
-    pub fn from_3di_file(files: &Vec<String>) -> Vec<Self> {
+    pub fn from_3di_file(files: &[String]) -> Vec<Self> {
         Self::new(files, AaLevel::Level1, false)
     }
 

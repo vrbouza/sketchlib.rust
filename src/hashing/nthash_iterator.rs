@@ -75,10 +75,10 @@ impl RollHash for NtHashIterator {
 impl NtHashIterator {
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates a new ntHash iterator, by loading DNA sequences into memory
-    pub fn new(files: &Vec<String>, rc: bool, min_qual: u8) -> Vec<Self> {
+    pub fn new(files: &[String], rc: bool, min_qual: u8) -> Vec<Self> {
         // Check if we're working with reads, and initalise the filter if so
-        let mut reader_peek =
-            parse_fastx_file(files[0].clone()).unwrap_or_else(|_| panic!("Invalid path/file: {}", files[0]));
+        let mut reader_peek = parse_fastx_file(files[0].clone())
+            .unwrap_or_else(|_| panic!("Invalid path/file: {}", files[0]));
         let seq_peek = reader_peek
             .next()
             .expect("Invalid FASTA/Q record")
@@ -115,17 +115,27 @@ impl NtHashIterator {
     }
 
     #[cfg(target_arch = "wasm32")]
-    /// Creates a new ntHash iterator, by loading DNA sequences into memory
-    pub fn new(files: (&web_sys::File, Option<&web_sys::File>), rc: bool, min_qual: u8) -> Vec<Self> {
+    /// Creates a new ntHash iterator, by loading DNA sequences into memory. WASM version.
+    pub fn new(
+        files: (&web_sys::File, Option<&web_sys::File>),
+        rc: bool,
+        min_qual: u8,
+    ) -> Vec<Self> {
         // Check if we're working with reads, and initalise the filter if so
 
         let file_name = files.0.name();
-        let mut file_type = file_name.split('.').nth(file_name.split('.').count() - 1).unwrap();
+        let mut file_type = file_name
+            .split('.')
+            .nth(file_name.split('.').count() - 1)
+            .unwrap();
         if file_type == "gz" {
-            file_type = file_name.split('.').nth(file_name.split('.').count() - 2).unwrap();
+            file_type = file_name
+                .split('.')
+                .nth(file_name.split('.').count() - 2)
+                .unwrap();
         }
 
-        let is_reads : bool;
+        let is_reads: bool;
         if ["fasta", "fa"].contains(&file_type) {
             is_reads = false;
         } else if ["fastq", "fq"].contains(&file_type) {
@@ -156,7 +166,6 @@ impl NtHashIterator {
         hash_it.seq_len = hash_it.seq.len() - 1;
         vec![hash_it]
     }
-
 
     #[cfg(not(target_arch = "wasm32"))]
     fn add_dna_seq(&mut self, filename: &str, min_qual: u8) {
@@ -199,12 +208,18 @@ impl NtHashIterator {
     #[cfg(target_arch = "wasm32")]
     fn add_dna_seq(&mut self, file: &web_sys::File, min_qual: u8) {
         let file_name = file.name();
-        let mut file_type = file_name.split('.').nth(file_name.split('.').count() - 1).unwrap();
+        let mut file_type = file_name
+            .split('.')
+            .nth(file_name.split('.').count() - 1)
+            .unwrap();
         if file_type == "gz" {
-            file_type = file_name.split('.').nth(file_name.split('.').count() - 2).unwrap();
+            file_type = file_name
+                .split('.')
+                .nth(file_name.split('.').count() - 2)
+                .unwrap();
         }
 
-        let is_reads : bool;
+        let is_reads: bool;
         if ["fasta", "fa"].contains(&file_type) {
             is_reads = false;
         } else if ["fastq", "fq"].contains(&file_type) {
@@ -248,40 +263,6 @@ impl NtHashIterator {
                 }
             }
         }
-
-        // while let Some(record) = reader.next() {
-        //     let seqrec = record.expect("Invalid FASTA/Q record");
-        //     if let Some(quals) = seqrec.qual() {
-        //         for (base, qual) in seqrec.seq().iter().zip(quals) {
-        //             if *qual >= min_qual {
-        //                 if valid_base(*base) {
-        //                     let encoded_base = encode_base(*base);
-        //                     self.acgt[encoded_base as usize] += 1;
-        //                     self.seq.push(encoded_base)
-        //                 } else {
-        //                     self.non_acgt += 1;
-        //                     self.seq.push(SEQSEP);
-        //                 }
-        //             } else {
-        //                 self.seq.push(SEQSEP);
-        //             }
-        //         }
-        //     } else {
-        //         for base in seqrec.seq().iter() {
-        //             if valid_base(*base) {
-        //                 let encoded_base = encode_base(*base);
-        //                 self.acgt[encoded_base as usize] += 1;
-        //                 self.seq.push(encoded_base)
-        //             } else {
-        //                 self.non_acgt += 1;
-        //                 self.seq.push(SEQSEP);
-        //             }
-        //         }
-        //     }
-        //
-        //     self.seq.push(SEQSEP);
-        // }
-
     }
 
     fn new_iterator(

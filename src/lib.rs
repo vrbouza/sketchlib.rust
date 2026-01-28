@@ -149,13 +149,13 @@ pub mod cli;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::cli::*;
 #[cfg(target_arch = "wasm32")]
-use crate::cli::{DEFAULT_MINCOUNT, DEFAULT_MINQUAL, InvertedQueryType};
+use crate::cli::{InvertedQueryType, DEFAULT_MINCOUNT, DEFAULT_MINQUAL};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::hashing::HashType;
 
 #[cfg(not(target_arch = "wasm32"))]
-use hashbrown::{HashSet, HashMap};
+use hashbrown::{HashMap, HashSet};
 
 pub mod sketch;
 #[cfg(not(target_arch = "wasm32"))]
@@ -176,8 +176,8 @@ pub mod io;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::io::{
-    get_input_list, parse_kmers, read_completeness_file, read_subset_names, reorder_input_files,
-    set_ostream, parse_metadata_info
+    get_input_list, parse_kmers, parse_metadata_info, read_completeness_file, read_subset_names,
+    reorder_input_files, set_ostream,
 };
 
 pub mod structures;
@@ -209,10 +209,6 @@ pub const DEFAULT_KMER: usize = 21;
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 extern crate console_error_panic_hook;
-#[cfg(target_arch = "wasm32")]
-use json;
-
-
 
 #[doc(hidden)]
 #[cfg(not(target_arch = "wasm32"))]
@@ -461,28 +457,31 @@ pub fn main() -> Result<(), Error> {
 
                 // Get input files
                 log::info!("Getting input files");
-                let input_files: Vec<(String, Vec<String>)> =
-                    get_input_list(file_list, seq_files);
+                let input_files: Vec<(String, Vec<String>)> = get_input_list(file_list, seq_files);
                 log::info!("Parsed {} samples in input list", input_files.len());
 
-                let mut differentsamples  : HashSet<String> = HashSet::new();
+                let mut differentsamples: HashSet<String> = HashSet::new();
 
                 for i in input_files.iter() {
                     differentsamples.insert(i.0.clone());
                 }
 
                 // Reordering by species, or default
-                let (file_order, map_names_labels) = if let Some(species_name_file) = species_names {
+                let (file_order, map_names_labels) = if let Some(species_name_file) = species_names
+                {
                     reorder_input_files(&input_files, species_name_file)
                 } else {
                     // Check first if there are repeated samples
 
-                    let tmpnamesset = input_files.iter().map(|x| x.0.clone()).collect::<HashSet<String>>();
+                    let tmpnamesset = input_files
+                        .iter()
+                        .map(|x| x.0.clone())
+                        .collect::<HashSet<String>>();
                     if tmpnamesset.len() == input_files.len() {
                         ((0..input_files.len()).collect(), None)
                     } else {
                         let mut tmpoutvec: Vec<usize> = vec![0; input_files.len()];
-                        let mut tmpmap : HashMap<String, usize> = HashMap::new();
+                        let mut tmpmap: HashMap<String, usize> = HashMap::new();
 
                         for (i, name) in tmpnamesset.iter().enumerate() {
                             tmpmap.insert(name.clone(), i);
@@ -496,20 +495,18 @@ pub fn main() -> Result<(), Error> {
                 };
 
                 // If species labels were provided, create the list of them
-                let species_labels_vec;
-                if map_names_labels.is_some() {
-                    let tmpdict = map_names_labels.as_ref().unwrap();
+                let species_labels_vec = if let Some(themaplabels) = map_names_labels {
                     let mut tmpvec: Vec<String> = vec!["".to_string(); differentsamples.len()];
                     file_order
                         .iter()
                         .zip(&input_files)
                         .for_each(|(idx, (name, _))| {
                             // log::info!("{:?} {:?}", name, idx);
-                            tmpvec[*idx] = tmpdict.get(name).unwrap_or(&"".to_owned()).clone();
+                            tmpvec[*idx] = themaplabels.get(name).unwrap_or(&"".to_owned()).clone();
                         });
-                    species_labels_vec = Some(tmpvec);
+                    Some(tmpvec)
                 } else {
-                    species_labels_vec = None;
+                    None
                 };
 
                 // Parse metadata, if any
@@ -568,8 +565,7 @@ pub fn main() -> Result<(), Error> {
 
                 // Get input files
                 log::info!("Getting input queries");
-                let input_files: Vec<(String, Vec<String>)> =
-                    get_input_list(file_list, seq_files);
+                let input_files: Vec<(String, Vec<String>)> = get_input_list(file_list, seq_files);
                 log::info!("Parsed {} samples in input query list", input_files.len());
 
                 log::info!("Sketching input queries");
@@ -762,8 +758,7 @@ pub fn main() -> Result<(), Error> {
             check_and_set_threads(*threads + 1);
             //get input files
             log::info!("Getting input files");
-            let input_files: Vec<(String, Vec<String>)> =
-                get_input_list(file_list, seq_files);
+            let input_files: Vec<(String, Vec<String>)> = get_input_list(file_list, seq_files);
             log::info!("Parsed {} samples in input list", input_files.len());
 
             //check if any of the new files are already existant in the db
@@ -924,7 +919,7 @@ pub fn main() {
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-extern {
+extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
 }
@@ -938,9 +933,9 @@ pub fn init_panic_hook() {
 
 #[cfg(target_arch = "wasm32")]
 /// Logging wrapper function for the WebAssembly version
-pub fn logw(text : &str, typ : Option<&str>) {
-    if typ.is_some() {
-        log((String::from("sketchlib.rust::") + typ.unwrap() + "::" + text).as_str());
+pub fn logw(text: &str, typ: Option<&str>) {
+    if let Some(thetyp) = typ {
+        log((String::from("sketchlib.rust::") + thetyp + "::" + text).as_str());
     } else {
         log(text);
     }
@@ -961,45 +956,51 @@ impl SketchlibData {
     pub fn new(skifile: web_sys::File) -> Self {
         let inverted_index = Inverted::load(&skifile).expect("Failed loading Sketchlib index");
 
-        logw(format!("Read inverted index:\n{inverted_index:?}").as_str(), Some("info"));
+        logw(
+            format!("Read inverted index:\n{inverted_index:?}").as_str(),
+            Some("info"),
+        );
 
         Self {
-            out_probs : Vec::new(),
+            out_probs: Vec::new(),
             index: inverted_index,
         }
     }
 
     /// Query some files against an inverted index
-    pub fn query(&mut self, file1: web_sys::File, file2 : Option<web_sys::File>) {
+    pub fn query(&mut self, file1: web_sys::File, file2: Option<web_sys::File>) {
         // TEMPORAL BEGIN
-        let min_count  = &DEFAULT_MINCOUNT;
-        let min_qual   = &DEFAULT_MINQUAL;
+        let min_count = &DEFAULT_MINCOUNT;
+        let min_qual = &DEFAULT_MINQUAL;
         let query_type = &InvertedQueryType::MatchCount;
         // TEMPORAL END
 
         // Get input files
         let (queries, _query_names) =
-            self.index.sketch_queries((&file1, file2.as_ref()), *min_count, *min_qual, false);
+            self.index
+                .sketch_queries((&file1, file2.as_ref()), *min_count, *min_qual, false);
 
-        logw(format!("Running query in mode: {query_type}").as_str(), Some("info"));
+        logw(
+            format!("Running query in mode: {query_type}").as_str(),
+            Some("info"),
+        );
 
         // Query loop (parallelised)
         let dist = match query_type {
-            InvertedQueryType::MatchCount => {
-                self.index.query_against_inverted_index(queries[0].as_slice())
-            },
-            InvertedQueryType::AllBins => {
-                self.index.all_shared_bins(queries[0].as_slice())
-            },
-            InvertedQueryType::AnyBins => {
-                self.index.any_shared_bins(queries[0].as_slice())
-            },
+            InvertedQueryType::MatchCount => self
+                .index
+                .query_against_inverted_index(queries[0].as_slice()),
+            InvertedQueryType::AllBins => self.index.all_shared_bins(queries[0].as_slice()),
+            InvertedQueryType::AnyBins => self.index.any_shared_bins(queries[0].as_slice()),
         };
 
-        let mut outvec : Vec<(f64, usize)> = Vec::with_capacity(dist.len());
+        let mut outvec: Vec<(f64, usize)> = Vec::with_capacity(dist.len());
 
-        for i in 0..dist.len() {
-            outvec.push( ((dist[i] as f64)/((2 * self.index.sketch_size()) as f64 - dist[i] as f64), i) );
+        for (i, d) in dist.iter().enumerate() {
+            outvec.push((
+                (*d as f64) / ((2 * self.index.sketch_size()) as f64 - *d as f64),
+                i,
+            ));
         }
 
         outvec.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("NaN obtained!"));
@@ -1008,36 +1009,55 @@ impl SketchlibData {
         self.out_probs = outvec;
     }
 
-
     /// Mapping function.
-    pub fn get_probs(&self, nouts : usize) -> String {
-        if self.out_probs.len() == 0 {
+    pub fn get_probs(&self, nouts: usize) -> String {
+        if self.out_probs.is_empty() {
             panic!("No probabilities calculated!");
         }
 
         let mut results = json::JsonValue::new_array();
 
-        logw(format!("Probabilities: {:?}", self.out_probs).as_str(), Some("info"));
+        logw(
+            format!("Probabilities: {:?}", self.out_probs).as_str(),
+            Some("info"),
+        );
 
-        results["probs"]    = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| json::JsonValue::Number(x.0.into())).collect());
-        results["names"]    = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| {
-            if let Some(labelsvec) = self.index.get_sample_labels() {
-                json::JsonValue::String(labelsvec[x.1].clone())
-            } else {
-                json::JsonValue::String("".to_string())
-            }
-        }).collect());
-        results["metadata"] = json::JsonValue::Array(self.out_probs.iter().take(nouts).map(|x| {
-            if let Some(metadatavec) = self.index.get_metadata() {
-                json::JsonValue::String(metadatavec[x.1].clone())
-            } else {
-                json::JsonValue::String("".to_string())
-            }
-        }).collect());
+        results["probs"] = json::JsonValue::Array(
+            self.out_probs
+                .iter()
+                .take(nouts)
+                .map(|x| json::JsonValue::Number(x.0.into()))
+                .collect(),
+        );
+        results["names"] = json::JsonValue::Array(
+            self.out_probs
+                .iter()
+                .take(nouts)
+                .map(|x| {
+                    if let Some(labelsvec) = self.index.get_sample_labels() {
+                        json::JsonValue::String(labelsvec[x.1].clone())
+                    } else {
+                        json::JsonValue::String("".to_string())
+                    }
+                })
+                .collect(),
+        );
+        results["metadata"] = json::JsonValue::Array(
+            self.out_probs
+                .iter()
+                .take(nouts)
+                .map(|x| {
+                    if let Some(metadatavec) = self.index.get_metadata() {
+                        json::JsonValue::String(metadatavec[x.1].clone())
+                    } else {
+                        json::JsonValue::String("".to_string())
+                    }
+                })
+                .collect(),
+        );
 
         logw(results.dump().as_str(), Some("debug"));
 
-        return results.dump();
+        results.dump()
     }
 }
-
