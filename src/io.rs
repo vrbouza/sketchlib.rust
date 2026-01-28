@@ -85,16 +85,13 @@ pub fn reorder_input_files(
         reordered_dict.insert(reordered_name, new_idx);
     }
 
-    let mut sample_order: Vec<usize>;
-    let outdict;
     if reordered_dict.is_empty() {
         log::warn!("Could not find any sample names in {species_name_file}");
-        sample_order = (0..input_files.len()).collect();
-        outdict = None;
+        ((0..input_files.len()).collect(), None)
     } else {
         // Use lookup table to create a list of new index for each input sample
         // This deals with missing labels
-        sample_order = Vec::with_capacity(input_files.len());
+        let mut sample_order = Vec::with_capacity(input_files.len());
         let mut new_idx = reordered_dict.len() - 1;
         for sample_name in input_files {
             let sample_idx = if let Some(order) = reordered_dict.get(&sample_name.0) {
@@ -113,10 +110,8 @@ pub fn reorder_input_files(
                 .count(),
             input_files.len()
         );
-        outdict = Some(map_names_labels);
+        (sample_order, Some(map_names_labels))
     }
-
-    (sample_order, outdict)
 }
 
 /// Parse the metadata for creating an inverted index, so that we can include them in it
